@@ -1,0 +1,152 @@
+document
+	= _ source:command* { return source; }
+
+command
+	= ":" _ i:identifier _ { return { line: line, column: column, type: "label", name: i }; }
+	/ i:identifier _ ":" _  { return { line: line, column: column, type: "label", name: i }; }
+	/ op:identifier args:expression_list _ { return { line: line, column: column, type: "operation", name: op, arguments: args }; }
+	/ directive
+
+directive
+	= ".proc"i _ commands:command* ".end"i _ { return { line: line, column: column, type: "proc", contents: commands }; }
+	/ ".equ"i _ name:identifier value:ordered_expression { return { line: line, column: column, type: "equate", name: name, value: value }; }
+	/ ".macro"i _ name:identifier params:identifier_list commands:command* _ ".end" _ { return { line: line, column: column, type: "macro", name: name, parameters: params, contents: commands }; }
+	/ directive:valid_directive _  args:expression_list { return { line: line, column: column, type:'directive', directive: directive, arguments: args }; }
+	
+valid_directive
+	= ".org"i
+	/ ".bss"i
+	/ ".align"i
+	/ ".include"i
+	/ ".incbig"i
+	/ ".incbytes"i
+	/ ".inclittle"i
+	/ ".data"i
+	/ ".dat"i
+	/ ".big"i
+	/ ".little"i
+
+identifier_list
+	= a:(identifier _ "," _)* b:identifier { return a.map(function(g) { return g[0]; }).concat(b); }
+
+expression_list
+	= a:(ordered_expression _ "," _)* b:ordered_expression { return a.map(function(g) { return g[0]; }).concat(b); }
+
+ordered_expression
+	= node:expression { 
+		if (node.type !== "unordered_binary") {
+			return node;
+		}
+
+		// Collapse chain into a couple lists for ease of use
+		var values = [],
+			operations = [],
+			index = 0;
+
+		do {
+			node.operation.index = index++;
+			operations.push(node.operation);
+			values.push(node.left);
+
+			node = node.right;
+		} while(node.type === "unordered_binary");
+		values.push(node);
+		
+		// Sort operations in order of their priority
+		// TODO: Try to group up numbers in like operations
+		operations.sort(function(a, b) { return b.priority - a.priority; });
+
+		// ... and then collapse value tree into binary operations
+		operations.forEach(function(o, i) {
+			var index = o.index;
+			operations.slice(i+1).forEach(function(o) {
+				if(index < o.index) { o.index-- }
+			});
+			values.splice(index, 2, {
+				line: o.line,
+				column: o.column,
+				type: "binary",
+				operation: o.operation,
+				left: values[index],
+				right: values[index+1]
+			})
+		});
+
+		return values[0];
+	}
+
+expression
+	= l:short_exp _ op:binary_op _ r:expression { return { line: line, column: column, type: "unordered_binary", operation: op, left: l, right: r } }
+	/ p:short_exp _  { return p; }
+
+short_exp
+	= "(" _ o:ordered_expression _ ")" _ { return o; }
+	/ "[" _ e:ordered_expression _ "]" _ { return { line: line, column: column, type: "address", expression: e } }
+	/ op:unary_op _ t:short_exp { return { line: line, column: column, type: "unary", operation: op, term: t } }
+	/ n:number { return { line: line, column: column, type: "number", value:n } }
+	/ s:string { return { line: line, column: column, type: "string", value:s } }
+	/ n:character { return { line: line, column: column, type: "number", value:n } }
+	/ i:identifier { return { line: line, column: column, type: "identifier", name:i } }
+
+// Operators
+binary_op
+	= op:"+"  { return { line: line, column: column, operation: op, priority: 5 }; }
+	/ op:"-"  { return { line: line, column: column, operation: op, priority: 5 }; }
+	/ op:"/"  { return { line: line, column: column, operation: op, priority: 6 }; }
+	/ op:"*"  { return { line: line, column: column, operation: op, priority: 6 }; }
+	/ op:"%"  { return { line: line, column: column, operation: op, priority: 6 }; }
+	/ op:"<<" { return { line: line, column: column, operation: op, priority: 3 }; }
+	/ op:">>" { return { line: line, column: column, operation: op, priority: 3 }; }
+	/ op:"||" { return { line: line, column: column, operation: op, priority: 2 }; }
+	/ op:"&&" { return { line: line, column: column, operation: op, priority: 1 }; }
+	/ op:"^"  { return { line: line, column: column, operation: op, priority: 4 }; }
+	/ op:"|"  { return { line: line, column: column, operation: op, priority: 4 }; }
+	/ op:"&"  { return { line: line, column: column, operation: op, priority: 4 }; }
+
+unary_op
+	= "+"
+	/ "-"
+	/ "~"
+
+// Primitive values
+string
+	= '"' string_char* '"'
+
+string_char
+	= [^"\\\n\r]
+	/ "\\n" { return "\n"; }
+	/ "\\r" { return "\r"; }
+	/ "\\t" { return "\t"; }
+	/ "\\b" { return "\b"; }
+	/ "\\f" { return "\f"; }
+	/ "\\\\" { return "\\"; }
+	/ "\\x" v:[0-9a-f]+ { return String.fromCharCode(parseInt(v, 16)); }
+	/ "\\u" v:[0-9a-f]+ { return String.fromCharCode(parseInt(v, 16)); }
+
+character
+	= "'" v:. "'" { return v.charCodeAt(0); }
+
+number
+	= "0x"i v:[0-9a-f]i { return parseInt(v, 16); }
+	/ "0b"i v:[0-9a-f]i { return parseInt(v, 2); }
+	/ "0"i v:[0-7]i { return parseInt(v, 8); }
+	/ "0" { return 0; }
+	/ "$" v:[0-9a-f]i { return parseInt(v, 16); }
+	/ v:[0-9]+ { return parseInt(v, 10); }
+
+identifier
+	= _ a:[_a-z]i b:[_a-z0-9]i* _ { return a + b.join(""); }
+
+// Whitespace and Comments
+_ 
+	= whitespace* { return { line: line, column: column, type: "whitespace" }; }
+
+whitespace
+	= [\n\r\t ]+
+	/ "/*" multiline_comment* "*/"
+	/ "//" [^\n\r]*
+	/ ";" [^\n\r]*
+
+multiline_comment
+	= [^*]
+	/ "*" &[^/]

@@ -1,0 +1,19 @@
+{
+	"author": "asterick",
+	"name": "jcoas",
+	"private": true,
+	"version": "0.1.0",
+	"repository": {
+		"type": "git",
+		"url": "git://github.com/asterick/jcoas.git"
+	},
+	"dependencies": {
+		"pegjs": "0.7.0",
+		"underscore": "1.4.2",
+		"grunt": "0.3.17",
+		"optimist": "0.3.5"
+	},
+	"engines": {
+		"node": ">=0.8.0"
+	}
+}
