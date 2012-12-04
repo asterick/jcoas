@@ -19,7 +19,7 @@ directive
 	/ macro
 	/ data_block
 	/ equate_directive
-	/ directive:valid_directive value:ordered_expression { return { line: line, column: column, type: directive, value: value }; }
+	/ directive:valid_directive value:expression { return { line: line, column: column, type: directive, value: value }; }
 	
 valid_directive
 	= ".org"i _ { return "org"; }
@@ -28,7 +28,7 @@ valid_directive
 	/ ".align"i _ { return "align"; }
 
 equate_directive
-	= ".equ"i _ name:identifier value:ordered_expression { return { line: line, column: column, type: "equate", name: name, value: value }; }
+	= ".equ"i _ name:identifier value:expression { return { line: line, column: column, type: "equate", name: name, value: value }; }
 
 data_block
 	= data_type:data_type args:expression_list {
@@ -90,29 +90,29 @@ include_types
 	}
 	/ ".incbig"i _ {
 		return function (line, column, file) {
-			var data = new Uint16Array((file.length +1) / 2);
-			for (i = 0; i < data.length; i++) { 
-				data[i] = file.readUInt16BE(i*2, true);
+			var data = [];
+			for (i = 0; i < file.length; i+=2) { 
+				data[i/2] = { type: 'number', value: file.readUInt16BE(i, true) };
 			}
-			return { line: line, column: column, type: "compiled", data:data }
+			return { line: line, column: column, type: "data", arguments:data }
 		}
 	}
 	/ ".inclittle"i _ {
 		return function (line, column, file) {
-			var data = new Uint16Array((file.length +1) / 2);
-			for (i = 0; i < data.length; i++) { 
-				data[i] = file.readUInt16LE(i*2, true);
+			var data = [];
+			for (i = 0; i < data.length; i+=2) { 
+				data[i/2] = { type: 'number', value: file.readUInt16LE(i, true) };
 			}
-			return { line: line, column: column, type: "compiled", data:data }
+			return { line: line, column: column, type: "data", arguments:data }
 		}
 	}
 	/ ".incbytes"i _ {
 		return function (line, column, file) {
-			var data = new Uint16Array(file.length);
-			for (i = 0; i < data.length; i++) { 
-				data[i] = file[i];
+			var data = [];
+			for (i = 0; i < file.length; i++) { 
+				data[i] = { type: 'number', value: file[i] };
 			}
-			return { line: line, column: column, type: "compiled", data:data }
+			return { line: line, column: column, type: "data", arguments:data }
 		}
 	}
 
@@ -196,7 +196,6 @@ procedure
 					walk(element.left);
 					walk(element.right);
 					break ;
-				case 'compiled':
 				case 'number':
 				case 'string':
 					break ;
@@ -215,80 +214,38 @@ identifier_list
 	= a:(identifier "," _)* b:identifier { return a.map(function(g) { return g[0]; }).concat(b); }
 
 expression_list
-	= a:(ordered_expression "," _)* b:ordered_expression { return a.map(function(g) { return g[0]; }).concat(b); }
+	= a:(expression "," _)* b:expression { return a.map(function(g) { return g[0]; }).concat(b); }
 
 
-// Expressions (ordered expression handles priority encoding)
-ordered_expression
-	= node:expression {
-		if (node.type !== "unordered_binary") {
-			return node;
-		}
-
-		// Collapse chain into a couple lists for ease of use
-		var values = [],
-			operations = [],
-			index = 0;
-
-		do {
-			node.operation.index = index++;
-			operations.push(node.operation);
-			values.push(node.left);
-
-			node = node.right;
-		} while(node.type === "unordered_binary");
-		values.push(node);
-		
-		// Sort operations in order of their priority
-		// TODO: Try to group up numbers in like operations
-		operations.sort(function(a, b) { return b.priority - a.priority; });
-
-		// ... and then collapse value tree into binary operations
-		operations.forEach(function(o, i) {
-			var index = o.index;
-			operations.slice(i+1).forEach(function(o) {
-				if(index < o.index) { o.index-- }
-			});
-			values.splice(index, 2, {
-				line: o.line,
-				column: o.column,
-				type: "binary",
-				operation: o.operation,
-				left: values[index],
-				right: values[index+1]
-			})
-		});
-
-		return values[0];
-	}
-
+// Expressions
 expression
-	= l:short_exp op:binary_op _ r:expression { return { line: line, column: column, type: "unordered_binary", operation: op, left: l, right: r } }
+	= l:short_exp op:binary_op _ r:expression { return { line: line, column: column, type: "unordered", operation: op, left: l, right: r } }
 	/ p:short_exp
 
 short_exp
-	= "(" _ o:ordered_expression ")" _ { return o; }
-	/ "[" _ e:ordered_expression "]" _ { return { line: line, column: column, type: "address", expression: e } }
+	= "(" _ o:expression ")" _ { return { line: line, column: column, type: "paren", term: o }; }
+	/ "[" _ e:expression "]" _ { return { line: line, column: column, type: "address", expression: e } }
 	/ op:unary_op _ t:short_exp { return { line: line, column: column, type: "unary", operation: op, term: t } }
-	/ n:number { return { line: line, column: column, type: "number", value:n } }
 	/ s:string { return { line: line, column: column, type: "string", value:s } }
-	/ c:character { return { line: line, column: column, type: "number", value:c } }
-	/ i:identifier { return { line: line, column: column, type: "identifier", name:i } }
+	/ n:number { return { line: line, column: column, weight: 1, type: "number", value:n } }
+	/ c:character { return { line: line, column: column, weight: 1, type: "number", value:c } }
+	/ r:register { return { line: line, column: column, weight: 3, type: "register", name:r } }
+	/ i:identifier { return { line: line, column: column, weight: 2, type: "identifier", name:i } }
 
 // Operators
 binary_op
-	= op:"+"  { return { line: line, column: column, operation: op, priority: 5 }; }
-	/ op:"-"  { return { line: line, column: column, operation: op, priority: 5 }; }
-	/ op:"/"  { return { line: line, column: column, operation: op, priority: 6 }; }
-	/ op:"*"  { return { line: line, column: column, operation: op, priority: 6 }; }
+	= op:"+"  { return { line: line, column: column, operation: op, priority: 5, reorder: "full" }; }
+	/ op:"-"  { return { line: line, column: column, operation: op, priority: 5, reorder: "partial" }; }
+	/ op:"/"  { return { line: line, column: column, operation: op, priority: 6, reorder: "partial" }; }
+	/ op:"*"  { return { line: line, column: column, operation: op, priority: 6, reorder: "full" }; }
 	/ op:"%"  { return { line: line, column: column, operation: op, priority: 6 }; }
 	/ op:"<<" { return { line: line, column: column, operation: op, priority: 3 }; }
 	/ op:">>" { return { line: line, column: column, operation: op, priority: 3 }; }
 	/ op:"||" { return { line: line, column: column, operation: op, priority: 2 }; }
 	/ op:"&&" { return { line: line, column: column, operation: op, priority: 1 }; }
-	/ op:"^"  { return { line: line, column: column, operation: op, priority: 4 }; }
-	/ op:"|"  { return { line: line, column: column, operation: op, priority: 4 }; }
-	/ op:"&"  { return { line: line, column: column, operation: op, priority: 4 }; }
+	/ op:"^"  { return { line: line, column: column, operation: op, priority: 4, reorder: "full" }; }
+	/ op:"|"  { return { line: line, column: column, operation: op, priority: 4, reorder: "full" }; }
+	/ op:"&"  { return { line: line, column: column, operation: op, priority: 4, reorder: "full" }; }
 	/ op:"#"  { return { line: line, column: column, operation: op, priority: 4 }; }
 
 unary_op
@@ -322,6 +279,21 @@ number
 	/ "0" _ { return 0; }
 	/ "$" v:[0-9a-f]i+ _ { return parseInt(v.join(''), 16); }
 	/ v:[0-9]+ _ { return parseInt(v.join(''), 10); }
+
+register
+	= "a"i _ { return "A"; }
+	/ "b"i _ { return "B"; }
+	/ "c"i _ { return "C"; }
+	/ "x"i _ { return "X"; }
+	/ "y"i _ { return "Y"; }
+	/ "z"i _ { return "Z"; }
+	/ "i"i _ { return "I"; }
+	/ "j"i _ { return "J"; }
+	/ "pc"i _ { return "PC"; }
+	/ "sp"i _ { return "SP"; }
+	/ "ex"i _ { return "EX"; }
+	/ "push"i _ { return "PUSH"; }
+	/ "pop"i _ { return "POP"; }
 
 identifier
 	= a:[_a-z]i b:[_a-z0-9]i* _ { return a + b.join(""); }
