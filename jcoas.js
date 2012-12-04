@@ -200,12 +200,32 @@ function flattenStage(tree) {
 		case 'number':
 			return tree;
 		default:
-			console.log(tree);
-			throw null;
+			throw new Error("Unhandled element: " + tree.type)
 		}
 	}
 	
 	return flatten(tree);
+}
+
+function locateErrors(tree) {
+	var detected = [],
+		defined = [];
+
+	function locate(tree){
+		if (Array.isArray(tree)) {
+			tree.forEach(locate);
+		}
+
+		switch (tree.type) {
+		case 'label':
+			defined.push(tree.name);
+			break ;
+		default:
+			throw new Error("Unhandled element: " + tree.type)
+		}
+	}
+
+	locate(tree);
 }
 
 var parsed = options._.reduce(function (list, f) {
