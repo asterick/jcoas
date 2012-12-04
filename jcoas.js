@@ -144,7 +144,7 @@ function flattenStage(tree) {
 			tree.left = flatten(tree.left);
 			tree.right = flatten(tree.right);
 
-			if (tree.left.type === 'number' ||
+			if (tree.left.type === 'number' &&
 				tree.right.type === 'number') {
 
 				return {
@@ -195,6 +195,7 @@ function flattenStage(tree) {
 		case 'operation':
 			tree.arguments = flatten(tree.arguments);
 			return tree;
+		case 'identifier':
 		case 'compiled':
 		case 'label':
 		case 'number':
@@ -214,11 +215,34 @@ function locateErrors(tree) {
 	function locate(tree){
 		if (Array.isArray(tree)) {
 			tree.forEach(locate);
+			return ;
 		}
 
 		switch (tree.type) {
+		case 'identifier':
+			detected.push(tree.name);
+			break ;
 		case 'label':
 			defined.push(tree.name);
+			break ;
+		case 'binary':
+			locate(tree.right);
+			locate(tree.left);
+			break ;
+		case 'unary':
+			locate(tree.term);
+			break ;
+		case 'bss':
+		case 'align':
+		case 'org':
+			locate(tree.value);
+			break ;
+		case 'operation':
+		case 'data':
+			locate(tree.arguments);
+			break ;
+		case 'compiled':
+		case 'number':
 			break ;
 		default:
 			throw new Error("Unhandled element: " + tree.type)
@@ -226,6 +250,17 @@ function locateErrors(tree) {
 	}
 
 	locate(tree);
+
+	var registers = [
+		"a", "b", "c", "x", "y", "z", "i", "j",
+		"sp", "pc", "ex",
+		"push", "pop"
+	]
+
+	var missing = _.difference(_.difference(detected, defined), registers);
+	if(missing.length) {
+		throw new Error("The following were undefined: " + missing.join(", "));
+	}
 }
 
 var parsed = options._.reduce(function (list, f) {
@@ -234,5 +269,6 @@ var parsed = options._.reduce(function (list, f) {
 
 parsed = replacementStage(parsed);
 parsed = flattenStage(parsed);
+locateErrors(parsed);
 
 console.log(JSON.stringify(parsed, null, 4));
