@@ -16,8 +16,8 @@ if (options._.length < 1) {
 }
 
 global.parser = pegjs.buildParser(
-		fs.readFileSync("coas.peg", "utf8"), 
-		{trackLineAndColumn: true});
+	fs.readFileSync("coas.peg", "utf8"), 
+	{trackLineAndColumn: true});
 
 /**
  * Deep copy object
@@ -93,11 +93,11 @@ function replacementStage(tree) {
 		var macro, args;
 
 		switch (element.type) {
+			// Explode located macros
 			case 'operation':
-				equate(element.arguments);
 				macro = macros[element.name];
 
-				if (!macro) { break ; }
+				if (!macro) { return list.concat(equate(element)); }
 
 				if (macro.parameters.length !== element.arguments.length) {
 					throw new Error("Macro " + macro.name + " argument mismatch");
@@ -105,7 +105,7 @@ function replacementStage(tree) {
 
 				args = {};
 				macro.parameters.forEach(function(name, i){
-					args[name] = element.arguments[i];
+					args[name] = equate(element.arguments[i]);
 				});
 
 				return list.concat(equate(equate(deepClone(macro.contents), args)));
@@ -121,18 +121,98 @@ function replacementStage(tree) {
 
 			// Simply modify contents
 			default:
-				element = equate(element) ;
+				return list.concat(equate(element));
 		}
-
-		return list.concat(element);
 	}, []);
+}
+
+/**
+ * Flatten stage
+ */
+
+function flattenStage(tree) {
+	function flatten(tree) {
+		if (Array.isArray(tree)) {
+			return tree.map(flatten);
+		}
+	
+		switch (tree.type) {
+		case 'string':
+			throw new Error("Strings are not allowed in " + tree.type + "blocks");
+
+		case 'binary':
+			tree.left = flatten(tree.left);
+			tree.right = flatten(tree.right);
+
+			if (tree.left.type === 'number' ||
+				tree.right.type === 'number') {
+
+				return {
+					type: 'number',
+					value: ({
+						"+": function(l,r) { return l+r; },
+						"-": function(l,r) { return l-r; },
+						"*": function(l,r) { return l*r; },
+						"/": function(l,r) { return l/r; },
+						"%": function(l,r) { return l%r; },
+						"<<": function(l,r) { return l<<r; },
+						">>": function(l,r) { return l>>r; },
+						"||": function(l,r) { return l||r; },
+						"&&": function(l,r) { return l&&r; },
+						"^": function(l,r) { return l^r; },
+						"|": function(l,r) { return l|r; },
+						"&": function(l,r) { return l&r; },
+						"#": function(l,r) { return (l & 0xFF) | ((r&0xFF) << 8); }
+					}[tree.operation])(tree.left.value, tree.right.value)
+				};
+
+			}
+
+			return tree;
+		case 'unary':
+			tree.term = flatten(tree.term);
+			if (tree.term.type === 'number') {
+				return {
+					type: 'number',
+					value: ({
+						"+": function(v) { return v; },
+						"-": function(v) { return -v; },
+						"~": function(v) { return ~v; },
+						"&": function(v) { return v; }
+					}[tree.operation])(tree.term.value)
+				};
+			}
+
+			return tree;
+
+		case 'bss':
+		case 'align':
+		case 'org':
+			tree.value = flatten(tree.value);
+			return tree;
+
+		case 'data':
+		case 'operation':
+			tree.arguments = flatten(tree.arguments);
+			return tree;
+		case 'compiled':
+		case 'label':
+		case 'number':
+			return tree;
+		default:
+			console.log(tree);
+			throw null;
+		}
+	}
+	
+	return flatten(tree);
 }
 
 var parsed = options._.reduce(function (list, f) {
 		return list.concat(global.parser.parse(fs.readFileSync(f, "utf8")));
 	}, []);
 
-
 parsed = replacementStage(parsed);
+parsed = flattenStage(parsed);
 
 console.log(JSON.stringify(parsed, null, 4));

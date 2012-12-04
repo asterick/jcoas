@@ -1,16 +1,16 @@
 document
-	= source:command_set { return source; }
+	= _ source:command_set { return source; }
 
 // Command set (Top level document)
 command_set
-	= _ commands:command* _ {
+	= commands:command* {
 		return commands.reduce(function(a,b) { return a.concat(b); }, []);
 	}
 
 command
-	= ":" _ i:identifier _ { return { line: line, column: column, type: "label", name: i }; }
-	/ i:identifier _ ":" _  { return { line: line, column: column, type: "label", name: i }; }
-	/ op:identifier args:expression_list _ { return { line: line, column: column, type: "operation", name: op, arguments: args }; }
+	= ":" _ i:identifier { return { line: line, column: column, type: "label", name: i }; }
+	/ i:identifier ":" _  { return { line: line, column: column, type: "label", name: i }; }
+	/ op:identifier args:expression_list { return { line: line, column: column, type: "operation", name: op, arguments: args }; }
 	/ directive
 
 directive
@@ -19,19 +19,19 @@ directive
 	/ macro
 	/ data_block
 	/ equate_directive
-	/ directive:valid_directive _  value:ordered_expression { return { line: line, column: column, type: directive, value: value }; }
+	/ directive:valid_directive value:ordered_expression { return { line: line, column: column, type: directive, value: value }; }
 	
 valid_directive
-	= ".org"i { return "org"; }
-	/ ".bss"i { return "bss"; }
-	/ ".ds"i { return "bss"; }
-	/ ".align"i { return "align"; }
+	= ".org"i _ { return "org"; }
+	/ ".bss"i _ { return "bss"; }
+	/ ".ds"i _ { return "bss"; }
+	/ ".align"i _ { return "align"; }
 
 equate_directive
 	= ".equ"i _ name:identifier value:ordered_expression { return { line: line, column: column, type: "equate", name: name, value: value }; }
 
 data_block
-	= data_type:data_type _ args:expression_list {
+	= data_type:data_type args:expression_list {
 		args = args.reduce(function(list, v) {
 			if (v.type === "string") {
 				v = v.value.split('').map(function(c) { 
@@ -77,18 +77,18 @@ data_block
 	}
 
 data_type
-	= ".data"
-	/ ".dat"i
-	/ ".big"i
-	/ ".little"i
+	= ".data"i _
+	/ ".dat"i _
+	/ ".big"i _
+	/ ".little"i _
 
 include_types
-	= ".include"i {
+	= ".include"i _ {
 		return function (line, column, file) {
 			return global.parser.parse(file.toString("utf8"));
 		}
 	}
-	/ ".incbig"i {
+	/ ".incbig"i _ {
 		return function (line, column, file) {
 			var data = new Uint16Array((file.length +1) / 2);
 			for (i = 0; i < data.length; i++) { 
@@ -97,7 +97,7 @@ include_types
 			return { line: line, column: column, type: "compiled", data:data }
 		}
 	}
-	/ ".inclittle"i {
+	/ ".inclittle"i _ {
 		return function (line, column, file) {
 			var data = new Uint16Array((file.length +1) / 2);
 			for (i = 0; i < data.length; i++) { 
@@ -106,7 +106,7 @@ include_types
 			return { line: line, column: column, type: "compiled", data:data }
 		}
 	}
-	/ ".incbytes"i {
+	/ ".incbytes"i _ {
 		return function (line, column, file) {
 			var data = new Uint16Array(file.length);
 			for (i = 0; i < data.length; i++) { 
@@ -117,7 +117,7 @@ include_types
 	}
 
 include
-	= parser:include_types _ args:expression_list {
+	= parser:include_types args:expression_list {
 		var context = global.parser,
 			active = context.active || (context.active = []);
 
@@ -141,7 +141,7 @@ include
 	}
 
 macro 
-	= ".macro"i _ name:identifier params:identifier_list commands:command_set _ ".end" _ { 
+	= ".macro"i _ name:identifier params:identifier_list commands:command_set ".end" _ { 
 		return { line: line, column: column, type: "macro", name: name, parameters: params, contents: commands };
 	}
 
@@ -212,17 +212,15 @@ procedure
 
 // Collections
 identifier_list
-	= _ "(" _ i:identifier_list _ ")" _ { return i; }
-	/ a:(identifier _ "," _)* b:identifier { return a.map(function(g) { return g[0]; }).concat(b); }
+	= a:(identifier "," _)* b:identifier { return a.map(function(g) { return g[0]; }).concat(b); }
 
 expression_list
-	= _ "(" _ i:expression_list _ ")" _ { return i; }
-	/ a:(ordered_expression _ "," _)* b:ordered_expression { return a.map(function(g) { return g[0]; }).concat(b); }
+	= a:(ordered_expression "," _)* b:ordered_expression { return a.map(function(g) { return g[0]; }).concat(b); }
 
 
 // Expressions (ordered expression handles priority encoding)
 ordered_expression
-	= node:expression { 
+	= node:expression {
 		if (node.type !== "unordered_binary") {
 			return node;
 		}
@@ -265,12 +263,12 @@ ordered_expression
 	}
 
 expression
-	= l:short_exp _ op:binary_op _ r:expression { return { line: line, column: column, type: "unordered_binary", operation: op, left: l, right: r } }
-	/ p:short_exp _  { return p; }
+	= l:short_exp op:binary_op _ r:expression { return { line: line, column: column, type: "unordered_binary", operation: op, left: l, right: r } }
+	/ p:short_exp
 
 short_exp
-	= "(" _ o:ordered_expression _ ")" _ { return o; }
-	/ "[" _ e:ordered_expression _ "]" _ { return { line: line, column: column, type: "address", expression: e } }
+	= "(" _ o:ordered_expression ")" _ { return o; }
+	/ "[" _ e:ordered_expression "]" _ { return { line: line, column: column, type: "address", expression: e } }
 	/ op:unary_op _ t:short_exp { return { line: line, column: column, type: "unary", operation: op, term: t } }
 	/ n:number { return { line: line, column: column, type: "number", value:n } }
 	/ s:string { return { line: line, column: column, type: "string", value:s } }
@@ -301,7 +299,7 @@ unary_op
 
 // Primitive values
 string
-	= '"' s:string_char* '"' { return s.join(""); }
+	= '"' s:string_char* '"' _ { return s.join(""); }
 
 string_char
 	= [^"\\\n\r]
@@ -315,18 +313,18 @@ string_char
 	/ "\\u" v:[0-9a-f]i+ { return String.fromCharCode(parseInt(v, 16)); }
 
 character
-	= "'" v:. "'" { return v.charCodeAt(0); }
+	= "'" v:. "'" _ { return v.charCodeAt(0); }
 
 number
-	= "0x"i v:[0-9a-f]i+ { return parseInt(v.join(''), 16); }
-	/ "0b"i v:[0-9a-f]i+ { return parseInt(v.join(''), 2); }
-	/ "0"i v:[0-7]i+ { return parseInt(v.join(''), 8); }
-	/ "0" { return 0; }
-	/ "$" v:[0-9a-f]i+ { return parseInt(v.join(''), 16); }
-	/ v:[0-9]+ { return parseInt(v.join(''), 10); }
+	= "0x"i v:[0-9a-f]i+ _ { return parseInt(v.join(''), 16); }
+	/ "0b"i v:[0-9a-f]i+ _ { return parseInt(v.join(''), 2); }
+	/ "0"i v:[0-7]i+ _ { return parseInt(v.join(''), 8); }
+	/ "0" _ { return 0; }
+	/ "$" v:[0-9a-f]i+ _ { return parseInt(v.join(''), 16); }
+	/ v:[0-9]+ _ { return parseInt(v.join(''), 10); }
 
 identifier
-	= _ a:[_a-z]i b:[_a-z0-9]i* _ { return a + b.join(""); }
+	= a:[_a-z]i b:[_a-z0-9]i* _ { return a + b.join(""); }
 
 // Whitespace and Comments
 _ 
