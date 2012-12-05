@@ -20,21 +20,22 @@ global.parser = pegjs.buildParser(
 	{trackLineAndColumn: true});
 
 var INSTRUCTIONS = {
+	// 2-OP characters
 	"SET" : { "code": 0x01, "length": 2 },
-	"ADD" : { "code": 0x02, "length": 2 },
-	"SUB" : { "code": 0x03, "length": 2 },
-	"MUL" : { "code": 0x04, "length": 2 },
-	"MLI" : { "code": 0x05, "length": 2 },
-	"DIV" : { "code": 0x06, "length": 2 },
-	"DVI" : { "code": 0x07, "length": 2 },
+	"ADD" : { "code": 0x02, "length": 2, carry: true },
+	"SUB" : { "code": 0x03, "length": 2, carry: true },
+	"MUL" : { "code": 0x04, "length": 2, carry: true },
+	"MLI" : { "code": 0x05, "length": 2, carry: true },
+	"DIV" : { "code": 0x06, "length": 2, carry: true },
+	"DVI" : { "code": 0x07, "length": 2, carry: true },
 	"MOD" : { "code": 0x08, "length": 2 },
 	"MDI" : { "code": 0x09, "length": 2 },
 	"AND" : { "code": 0x0a, "length": 2 },
 	"BOR" : { "code": 0x0b, "length": 2 },
 	"XOR" : { "code": 0x0c, "length": 2 },
-	"SHR" : { "code": 0x0d, "length": 2 },
-	"ASR" : { "code": 0x0e, "length": 2 },
-	"SHL" : { "code": 0x0f, "length": 2 },
+	"SHR" : { "code": 0x0d, "length": 2, carry: true },
+	"ASR" : { "code": 0x0e, "length": 2, carry: true },
+	"SHL" : { "code": 0x0f, "length": 2, carry: true },
 	"IFB" : { "code": 0x10, "length": 2 },
 	"IFC" : { "code": 0x11, "length": 2 },
 	"IFE" : { "code": 0x12, "length": 2 },
@@ -43,10 +44,11 @@ var INSTRUCTIONS = {
 	"IFA" : { "code": 0x15, "length": 2 },
 	"IFL" : { "code": 0x16, "length": 2 },
 	"IFU" : { "code": 0x17, "length": 2 },
-	"ADX" : { "code": 0x1a, "length": 2 },
-	"SBX" : { "code": 0x1b, "length": 2 },
+	"ADX" : { "code": 0x1a, "length": 2, carry: true, volatile: true },
+	"SBX" : { "code": 0x1b, "length": 2, carry: true, volatile: true },
 	"STI" : { "code": 0x1e, "length": 2 },
 	"STD" : { "code": 0x1f, "length": 2 },
+	// 1-OP characters
 	"JSR" : { "code": 0x01, "length": 1 },
 	"INT" : { "code": 0x08, "length": 1 },
 	"IAG" : { "code": 0x09, "length": 1 },
@@ -251,23 +253,32 @@ function balance(tree) {
 
 /**
  * Mark expressions as integer
+ * integer: Element contains only compile tile numerical values
+ * volatile: Element uses EX register (dangerous)
  */
 
 function mark(tree) {
 	return walk(tree, function (element) {
 		switch(element.type) {
 		case 'indirect':
+			element.integer = false;
+			element.volatile = element.value.volatile;
+			break ;
 		case 'register':
 			element.integer = false;
+			element.volatile = (element.name === 'EX');
 			break ;
 		case 'identifier':
 		case 'number':
 			element.integer = true;
+			element.volatile = false;
 			break ;
 		case 'binary':
+			element.volatile = element.right.volatile || element.right.volatile;
 			element.integer = element.right.integer && element.left.integer;
 			break ;
 		case 'unary':
+			element.volatile = element.value.volatile;
 			element.integer = element.operation !== '&' && element.value.integer;
 			break ;
 		}
@@ -342,48 +353,47 @@ function replace(tree) {
 function flatten(tree) {
 	return walk(tree, function (element) {
 		switch (element.type) {
-		case 'string':
-			throw new Error("Strings are not allowed in " + element.type + "blocks");
-
 		case 'binary':
-			if (element.left.type === 'number' &&
-				element.right.type === 'number') {
-
-				return {
-					type: 'number',
-					value: ({
-						"+": function(l,r) { return l+r; },
-						"-": function(l,r) { return l-r; },
-						"*": function(l,r) { return l*r; },
-						"/": function(l,r) { return l/r; },
-						"%": function(l,r) { return l%r; },
-						"<<": function(l,r) { return l<<r; },
-						">>": function(l,r) { return l>>r; },
-						"||": function(l,r) { return l||r; },
-						"&&": function(l,r) { return l&&r; },
-						"^": function(l,r) { return l^r; },
-						"|": function(l,r) { return l|r; },
-						"&": function(l,r) { return l&r; },
-						"#": function(l,r) { return (l & 0xFF) | ((r&0xFF) << 8); }
-					}[element.operation])(element.left.value, element.right.value)
-				};
-
+			if (element.left.type !== 'number' ||
+				element.right.type !== 'number') {
+				break ;
 			}
-
-			break ;
+			
+			return {
+				type: 'number',
+				value: ({
+					"+": function(l,r) { return l+r; },
+					"-": function(l,r) { return l-r; },
+					"*": function(l,r) { return l*r; },
+					"/": function(l,r) { return l/r; },
+					"%": function(l,r) { return l%r; },
+					"<<": function(l,r) { return l<<r; },
+					">>": function(l,r) { return l>>r; },
+					"||": function(l,r) { return l||r; },
+					"&&": function(l,r) { return l&&r; },
+					"^": function(l,r) { return l^r; },
+					"|": function(l,r) { return l|r; },
+					"&": function(l,r) { return l&r; },
+					"#": function(l,r) { return (l & 0xFF) | ((r&0xFF) << 8); }
+				}[element.operation])(element.left.value, element.right.value)
+			};
 		case 'unary':
-			if (element.value.type === 'number') {
-				return {
-					type: 'number',
-					value: ({
-						"-": function(v) { return -v; },
-						"~": function(v) { return ~v; },
-						"&": function(v) { return v; }
-					}[element.operation])(element.value.value)
-				};
+			if (element.operation === '-') {
+				return element.value;
 			}
 
-			break ;
+			if (element.value.type !== 'number') {
+				break ;
+			}
+
+			return {
+				type: 'number',
+				value: ({
+					"-": function(v) { return -v; },
+					"~": function(v) { return ~v; },
+					"&": function(v) { return v; }
+				}[element.operation])(element.value.value)
+			};
 		}
 	});
 }
@@ -398,6 +408,16 @@ function verify(tree) {
 
 	walk(tree, function(element) {
 		switch (element.type) {
+		case 'string':
+			throw new Error("Strings are not allowed in " + element.type + "blocks");
+
+		case 'data':
+			element.arguments.forEach(function (element) {
+				if (!element.integer) {
+					throw new Error("Data blocks may only contain compile time expressions");
+				}
+			});
+			break ;
 		case 'operation':
 			var opcode = INSTRUCTIONS[element.name];
 
@@ -437,16 +457,31 @@ function verify(tree) {
 	}
 }
 
+/**
+ * Break apart complex expressions
+ */
+
+function breakdown(tree) {
+	// TODO: BREAK DOWN COMPLEX INSTRUCTIONS
+	return tree;
+}
+
+/**
+ * Count identifiers
+ */
 function identifiers(tree) {
 	var unresolved = 0;
 
-	walk(tree, function(element) {
+	walk(tree, function (element) {
 		if (element.identifier) { unresolved++; }
 	});
 
 	return unresolved;
 }
 
+/**
+ * Estimate the values of labels
+ */
 function estimate(tree, estimates) {
 	// These are our PC ranges
 	var minimum = 0,
@@ -458,6 +493,8 @@ function estimate(tree, estimates) {
 	}
 
 	function instruction(element) {
+		var instruction = INSTRUCTIONS[element.name];
+		
 		// TODO: ESTIMATE SIZE OF THE OPERATION HERE
 		// TODO: ACTUAL ESTIMATION HERE
 		// TODO: CONVERT TO DATA IF LENGTH IS FIXED
@@ -505,17 +542,19 @@ function data(tree) {
 	return output;
 }
 
-function compile(tree) {
+function assemble(tree) {
 	var estimates = {};
 	balance(tree);			// Order expression stage
 	tree = replace(tree);	// Replace macros and equates
 	mark(tree);				// Mark expressions which will resolve to an integer at compile time
 	verify(tree);			// Run some sanity checks
 
-	// TODO: BREAK DOWN COMPLEX INSTRUCTIONS
+	tree = breakdown(tree);
+
+	//console.log(JSON.stringify(tree,null,4));
 
 	// Until all our expressions have been resolved
-	while (identifiers(tree) > 0) {
+	do {
 		estimate(tree, estimates);
 
 		// Locate all our keys that have no-delta in minimums and maximum
@@ -532,7 +571,7 @@ function compile(tree) {
 		// Replace and flatten the tree
 		define(tree, keys);
 		flatten(tree);
-	}
+	} while (identifiers(tree) > 0);
 
 	//console.log(JSON.stringify(tree,null,4));
 	process.exit(-1);
@@ -544,4 +583,4 @@ var parsed = options._.reduce(function (list, f) {
 		return list.concat(global.parser.parse(fs.readFileSync(f, "utf8")));
 	}, []);
 
-compile(parsed);
+assemble(parsed);
