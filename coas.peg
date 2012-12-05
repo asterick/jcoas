@@ -8,9 +8,9 @@ command_set
 	}
 
 command
-	= ":" _ i:identifier { return { line: line, column: column, type: "label", name: i }; }
-	/ i:identifier ":" _  { return { line: line, column: column, type: "label", name: i }; }
-	/ op:identifier args:expression_list { return { line: line, column: column, type: "operation", name: op, arguments: args }; }
+	= ":" _ i:identifier { return { line: line, column: column, type: "label", name: i.toUpperCase() }; }
+	/ i:identifier ":" _  { return { line: line, column: column, type: "label", name: i.toUpperCase() }; }
+	/ op:identifier args:expression_list { return { line: line, column: column, type: "operation", name: op.toUpperCase(), arguments: args }; }
 	/ directive
 
 directive
@@ -28,7 +28,7 @@ valid_directive
 	/ ".align"i _ { return "align"; }
 
 equate_directive
-	= ".equ"i _ name:identifier value:expression { return { line: line, column: column, type: "equate", name: name, value: value }; }
+	= ".equ"i _ name:identifier value:expression { return { line: line, column: column, type: "equate", name: name.toUpperCase(), value: value }; }
 
 data_block
 	= data_type:data_type args:expression_list {
@@ -141,72 +141,14 @@ include
 	}
 
 macro 
-	= ".macro"i _ name:identifier params:identifier_list commands:command_set ".end" _ { 
-		return { line: line, column: column, type: "macro", name: name, parameters: params, contents: commands };
+	= ".macro"i _ name:identifier params:expression_list commands:command_set ".end" _ { 
+		return { line: line, column: column, type: "macro", name: name.toUpperCase(), parameters: params, contents: commands };
 	}
 
 // Auto-escape identifiers which have been wrapped in a proc block
 procedure
 	= ".proc"i _ commands:command_set ".end"i _ {
-		var context = global.parser,
-			_suffix = "$p" + ((context.index) ? (context.index++) : (context.index = 0));
-
-		function suffix(v) {
-			return v + ((v[0] === '_') ? _suffix : '');
-		}
-
-		function walk(element) {
-			if (Array.isArray(element)) { 
-				element.forEach(walk); 
-				return ; 
-			}
-
-			switch (element.type) {
-				case 'data':
-					walk(element.arguments);
-					break;
-				case 'align':
-				case 'bss':
-				case 'org':
-					walk(element.value);
-					break ;
-				case 'equate':
-					element.name = suffix(element.name);
-					walk(element.value);
-					break ;				
-				case 'macro':
-					element.name = suffix(element.name);
-					element.parameters = element.parameters.map(suffix);
-					walk(element.contents);
-					break ;
-				case 'operation':
-					element.name = suffix(element.name);
-					walk(element.arguments);
-					break ;
-				case 'label':
-					element.name = suffix(element.name);
-					break ;
-				case 'identifier':
-					element.name = suffix(element.name);
-					break ;
-				case 'unary':
-					walk(element.term);
-					break ;
-				case 'binary':
-					walk(element.left);
-					walk(element.right);
-					break ;
-				case 'number':
-				case 'string':
-					break ;
-				default:
-					throw new Error("Could not process block " + element.name)
-					break ;
-			}
-		}
-
-		walk(commands);
-		return commands;
+		return { line: line, column: column, type: "proc", contents: commands };
 	}
 
 // Collections
@@ -220,23 +162,23 @@ expression_list
 // Expressions
 expression
 	= l:short_exp op:binary_op _ r:expression { return { line: line, column: column, type: "unordered", operation: op, left: l, right: r } }
-	/ p:short_exp
+	/ short_exp
 
 short_exp
-	= "(" _ o:expression ")" _ { return { line: line, column: column, type: "paren", term: o }; }
-	/ "[" _ e:expression "]" _ { return { line: line, column: column, type: "address", expression: e } }
-	/ op:unary_op _ t:short_exp { return { line: line, column: column, type: "unary", operation: op, term: t } }
+	= "(" _ o:expression ")" _ { return { line: line, column: column, type: "paren", value: o }; }
+	/ "[" _ e:expression "]" _ { return { line: line, column: column, type: "indirect", value: e } }
+	/ op:unary_op _ t:short_exp { return { line: line, column: column, type: "unary", operation: op, value: t } }
 	/ s:string { return { line: line, column: column, type: "string", value:s } }
 	/ n:number { return { line: line, column: column, weight: 1, type: "number", value:n } }
 	/ c:character { return { line: line, column: column, weight: 1, type: "number", value:c } }
-	/ r:register { return { line: line, column: column, weight: 3, type: "register", name:r } }
-	/ i:identifier { return { line: line, column: column, weight: 2, type: "identifier", name:i } }
+	/ r:register ![_a-z0-9]i _ { return { line: line, column: column, weight: 3, type: "register", name:r } }
+	/ i:identifier { return { line: line, column: column, weight: 2, type: "identifier", name:i.toUpperCase() } }
 
 // Operators
 binary_op
 	= op:"+"  { return { line: line, column: column, operation: op, priority: 5, reorder: "full" }; }
-	/ op:"-"  { return { line: line, column: column, operation: op, priority: 5, reorder: "partial" }; }
-	/ op:"/"  { return { line: line, column: column, operation: op, priority: 6, reorder: "partial" }; }
+	/ op:"-"  { return { line: line, column: column, operation: op, priority: 5, inverse: "+", reorder: "partial" }; }
+	/ op:"/"  { return { line: line, column: column, operation: op, priority: 6, inverse: "*", reorder: "partial" }; }
 	/ op:"*"  { return { line: line, column: column, operation: op, priority: 6, reorder: "full" }; }
 	/ op:"%"  { return { line: line, column: column, operation: op, priority: 6 }; }
 	/ op:"<<" { return { line: line, column: column, operation: op, priority: 3 }; }
@@ -281,19 +223,19 @@ number
 	/ v:[0-9]+ _ { return parseInt(v.join(''), 10); }
 
 register
-	= "a"i _ { return "A"; }
-	/ "b"i _ { return "B"; }
-	/ "c"i _ { return "C"; }
-	/ "x"i _ { return "X"; }
-	/ "y"i _ { return "Y"; }
-	/ "z"i _ { return "Z"; }
-	/ "i"i _ { return "I"; }
-	/ "j"i _ { return "J"; }
-	/ "pc"i _ { return "PC"; }
-	/ "sp"i _ { return "SP"; }
-	/ "ex"i _ { return "EX"; }
-	/ "push"i _ { return "PUSH"; }
-	/ "pop"i _ { return "POP"; }
+	= "a"i { return "A"; }
+	/ "b"i { return "B"; }
+	/ "c"i { return "C"; }
+	/ "x"i { return "X"; }
+	/ "y"i { return "Y"; }
+	/ "z"i { return "Z"; }
+	/ "i"i { return "I"; }
+	/ "j"i { return "J"; }
+	/ "pc"i { return "PC"; }
+	/ "sp"i { return "SP"; }
+	/ "ex"i { return "EX"; }
+	/ "push"i { return "PUSH"; }
+	/ "pop"i { return "POP"; }
 
 identifier
 	= a:[_a-z]i b:[_a-z0-9]i* _ { return a + b.join(""); }

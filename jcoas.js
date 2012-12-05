@@ -19,6 +19,45 @@ global.parser = pegjs.buildParser(
 	fs.readFileSync("coas.peg", "utf8"), 
 	{trackLineAndColumn: true});
 
+var INSTRUCTIONS = {
+	"SET" : { "code": 0x01, "length": 2 },
+	"ADD" : { "code": 0x02, "length": 2 },
+	"SUB" : { "code": 0x03, "length": 2 },
+	"MUL" : { "code": 0x04, "length": 2 },
+	"MLI" : { "code": 0x05, "length": 2 },
+	"DIV" : { "code": 0x06, "length": 2 },
+	"DVI" : { "code": 0x07, "length": 2 },
+	"MOD" : { "code": 0x08, "length": 2 },
+	"MDI" : { "code": 0x09, "length": 2 },
+	"AND" : { "code": 0x0a, "length": 2 },
+	"BOR" : { "code": 0x0b, "length": 2 },
+	"XOR" : { "code": 0x0c, "length": 2 },
+	"SHR" : { "code": 0x0d, "length": 2 },
+	"ASR" : { "code": 0x0e, "length": 2 },
+	"SHL" : { "code": 0x0f, "length": 2 },
+	"IFB" : { "code": 0x10, "length": 2 },
+	"IFC" : { "code": 0x11, "length": 2 },
+	"IFE" : { "code": 0x12, "length": 2 },
+	"IFN" : { "code": 0x13, "length": 2 },
+	"IFG" : { "code": 0x14, "length": 2 },
+	"IFA" : { "code": 0x15, "length": 2 },
+	"IFL" : { "code": 0x16, "length": 2 },
+	"IFU" : { "code": 0x17, "length": 2 },
+	"ADX" : { "code": 0x1a, "length": 2 },
+	"SBX" : { "code": 0x1b, "length": 2 },
+	"STI" : { "code": 0x1e, "length": 2 },
+	"STD" : { "code": 0x1f, "length": 2 },
+	"JSR" : { "code": 0x01, "length": 1 },
+	"INT" : { "code": 0x08, "length": 1 },
+	"IAG" : { "code": 0x09, "length": 1 },
+	"IAS" : { "code": 0x0a, "length": 1 },
+	"RFI" : { "code": 0x0b, "length": 1 },
+	"IAQ" : { "code": 0x0c, "length": 1 },
+	"HWN" : { "code": 0x10, "length": 1 },
+	"HWQ" : { "code": 0x11, "length": 1 },
+	"HWI" : { "code": 0x12, "length": 1 }
+	};
+
 /**
  * Deep copy object
  */
@@ -43,7 +82,9 @@ function deepClone(obj) {
 
 function walk(element, callback) {
 	if (Array.isArray(element)) {
-		return element.map(function(e) { return walk(e, callback); });
+		return element.reduce(function(list, e) {
+			return list.concat(walk(e, callback));
+		}, []);
 	}
 
 	switch (element.type) {
@@ -57,7 +98,7 @@ function walk(element, callback) {
 			return e;
 		case 'unary':
 		case 'paren':
-			element.term = walk(element.term, callback);
+			element.value = walk(element.value, callback);
 			break ;
 		case 'binary':
 			element.right = walk(element.right, callback);
@@ -70,7 +111,13 @@ function walk(element, callback) {
 		case 'align':
 		case 'bss':
 		case 'org':
+		case 'equate':
+		case 'indirect':
 			element.value = walk(element.value, callback);
+			break ;
+		case 'proc':
+		case 'macro':
+			element.contents = walk(element.contents, callback);
 			break ;
 		case 'register':
 		case 'identifier':
@@ -86,11 +133,26 @@ function walk(element, callback) {
 }
 
 /**
+ * Relabeler
+ */
+
+var suffixIndex = 0;
+function relabel(tree) {
+	var suffix = "$"+(suffixIndex++);
+
+	return walk(tree, function(element) {
+		if (element.name && element.name[0] === "_") {
+			element.name += suffix;
+		}
+	});
+}
+
+/**
  * Balancing stage
  */
 
 function balance(tree) {
-	walk(tree, function (node) {
+	return walk(tree, function (node) {
 		if (node.type !== "unordered") {
 			return ;
 		}
@@ -98,7 +160,8 @@ function balance(tree) {
 		// Collapse chain into a couple lists for ease of use
 		var values = [],
 			operations = [],
-			index = 0;
+			index = 0,
+			end, sortie, first, index;
 
 		do {
 			node.operation.index = index++;
@@ -110,52 +173,111 @@ function balance(tree) {
 		values.push(node);
 		
 		// Sort operations in order of their priority
-		operations.sort(function(a, b) { return b.priority - a.priority; });
+		operations.sort(function(a, b) {
+			if (b.priority > a.priority) return 1;
+			else if(b.priority < a.priority) return -1;
 
-		var start = 0, 
-			end;
+			return a.index - b.index;
+		});
+		
+		while (operations.length) {
+			first = operations[0];
+			index = first.index;
 
-		while (start < operations.length) {
-			var end = start;
-
-			while (end < operations.length && operations[start].operation === operations[end].operation) {
-				end++;
+			// Find a reorderable group
+			end = 0;
+			while (end < operations.length && 
+				operations[end].operation === first.operation &&
+				(operations[end].index - index) === end) { 
+				end++; 
 			}
 
-			switch(operations[start].reorder) {
-			case 'partial':
-				start++;
-			case 'full':
-				var sorted = _.sortBy(values.slice(start, end+1),'weight');
-				values.splice.apply(values, [start, (end-start+1)].concat(sorted));
-				start = end;
+			function foldUp(index) {
+				var operation = operations[index],
+					left = values[operation.index],
+					right = values[operation.index+1];
+
+				operations.splice(index, 1);
+				values.splice(operation.index, 2, {
+					type: "binary",
+					operation: (index > 0 && first.reorder === 'partial') ? first.inverse : first.operation,
+					column: left.column,
+					line: left.line,
+					left: left,
+					right: right
+				});
+
+				operations.forEach(function (o) {
+					if (o.index >= operation.index) { o.index--; }
+				});
+			}
+
+			// Group registers together (when allowed)
+			if (first.reorder) {
+				sortie = values.slice(index+1,index+end+1);
+				if (values[0].type === 'register') {
+					sortie.sort(function (a, b) { return a.type === 'register' ? -1 : 1; });
+				} else {
+					sortie.sort(function (a, b) { return a.type !== 'register' ? -1 : 1; });
+				}
+				values.splice.apply(values,[index+1,sortie.length].concat(sortie));
+
+				// Fold up based on the type (prioritize non-register math)
+				while(end) {
+					var best = 0,
+						i;
+					
+					for (i = 1; i < end; i++) {
+						if (values[index+i].type === 'register' &&
+							values[index+i+1].type === 'register')
+						{
+							continue ;
+						}
+						best = i;
+						break ;
+					}
+					
+					foldUp(best);
+					end--;
+				}
+			} else {
+				while(end--) { foldUp(0); }
 			}
 		}
-
-		// ... and then collapse value tree into binary operations
-		operations.forEach(function(o, i) {
-			var index = o.index;
-			operations.slice(i+1).forEach(function(o) {
-				if(index < o.index) { o.index-- }
-			});
-			values.splice(index, 2, {
-				line: o.line,
-				column: o.column,
-				type: "binary",
-				operation: o.operation,
-				left: values[index],
-				right: values[index+1]
-			})
-		});
 
 		return values[0];
 	});
 }
 
 /**
+ * Mark expressions as integer
+ */
+
+function mark(tree) {
+	return walk(tree, function (element) {
+		switch(element.type) {
+		case 'indirect':
+		case 'register':
+			element.integer = false;
+			break ;
+		case 'identifier':
+		case 'number':
+			element.integer = true;
+			break ;
+		case 'binary':
+			element.integer = element.right.integer && element.left.integer;
+			break ;
+		case 'unary':
+			element.integer = element.operation !== '&' && element.value.integer;
+			break ;
+		}
+	});
+}
+
+/**
  * Replace .macro and .equ 
  */
-function replace(tree, set) {
+function define(tree, set) {
 	return walk(tree, function(element) {
 		if (element.type === 'identifier' ||
 			set[element.name]) {
@@ -164,7 +286,7 @@ function replace(tree, set) {
 	})
 }
 
-function replacementStage(tree) {
+function replace(tree) {
 	var equates = {},
 		macros = {};
 
@@ -176,7 +298,7 @@ function replacementStage(tree) {
 			case 'operation':
 				macro = macros[element.name];
 
-				if (!macro) { return list.concat(replace(element, equates)); }
+				if (!macro) { return list.concat(define(element, equates)); }
 
 				if (macro.parameters.length !== element.arguments.length) {
 					throw new Error("Macro " + macro.name + " argument mismatch");
@@ -184,27 +306,31 @@ function replacementStage(tree) {
 
 				args = {};
 				macro.parameters.forEach(function(name, i){
-					args[name] = replace(element.arguments[i], equates);
+					args[name] = define(element.arguments[i], equates);
 				});
 
 				return list.concat(
-					replace(
-						replace(deepClone(macro.contents), args), 
+					define(
+						define(deepClone(macro.contents), args), 
 						equates)
 					);
 
 			// Replacements are removed
+			case 'proc':
+				return list.concat(replace(relabel(element.contents)));
 			case 'equate':
+				if (equates[element.name]) throw new Error("Cannot redefine " + element.name);
 				equates[element.name] = element.value;
 				return list;
 			case 'macro':
-				element.contents = replacementStage(element.contents);
+				if (equates[element.name]) throw new Error("Cannot redefine " + element.name);
+				element.contents = replace(relabel(element.contents));
 				macros[element.name] = element;
 				return list;
 
 			// Simply modify contents
 			default:
-				return list.concat(replace(element, equates));
+				return list.concat(define(element, equates));
 		}
 	}, []);
 }
@@ -214,7 +340,7 @@ function replacementStage(tree) {
  */
 
 function flatten(tree) {
-	walk(tree, function (element) {
+	return walk(tree, function (element) {
 		switch (element.type) {
 		case 'string':
 			throw new Error("Strings are not allowed in " + element.type + "blocks");
@@ -246,14 +372,14 @@ function flatten(tree) {
 
 			break ;
 		case 'unary':
-			if (element.term.type === 'number') {
+			if (element.value.type === 'number') {
 				return {
 					type: 'number',
 					value: ({
 						"-": function(v) { return -v; },
 						"~": function(v) { return ~v; },
 						"&": function(v) { return v; }
-					}[element.operation])(element.term.value)
+					}[element.operation])(element.value.value)
 				};
 			}
 
@@ -266,23 +392,42 @@ function flatten(tree) {
  * Verification stage
  */
 
-function defined(tree) {
+function verify(tree) {
 	var detected = [],
 		defined = [];
 
 	walk(tree, function(element) {
 		switch (element.type) {
-			case 'org':
-			case 'align':
-			case 'bss':
-			if (element.value.type !== 'number') { throw new Error("Cannot use label / register relative tags in "+element.type);}
-				break ;
-			case 'identifier':
-				detected.push(element.name);
-				break ;
-			case 'label':
-				defined.push(element.name);
-				break ;
+		case 'operation':
+			var opcode = INSTRUCTIONS[element.name];
+
+			if (!opcode) {
+				throw new Error("Unrecognized opcode: " + element.name);
+			}
+
+			if (opcode.length !== element.arguments.length) {
+				throw new Error("Argument count mismatch");
+			}
+
+			element.arguments.slice(0,opcode.length - 1).forEach(function (element) {
+				if (element.type !== 'register' && element.type !== 'indirect') {
+					throw new Error("Left-hand argument must be an address or register");
+				}
+			});
+			break ;
+		case 'org':
+		case 'align':
+		case 'bss':
+			if (element.value.type !== 'number') {
+				throw new Error("Cannot use label / register relative tags in "+element.type);
+			}
+			break ;
+		case 'identifier':
+			detected.push(element.name);
+			break ;
+		case 'label':
+			defined.push(element.name);
+			break ;
 		}
 	});
 
@@ -290,7 +435,16 @@ function defined(tree) {
 	if(missing.length) {
 		throw new Error("Undefined elements error: " + missing.join(", "));
 	}
-	return detected;
+}
+
+function identifiers(tree) {
+	var unresolved = 0;
+
+	walk(tree, function(element) {
+		if (element.identifier) { unresolved++; }
+	});
+
+	return unresolved;
 }
 
 function estimate(tree, estimates) {
@@ -314,7 +468,6 @@ function estimate(tree, estimates) {
 	}
 
 
-	// TODO: DETERMINE SIZE OF STUFF HERE
 	walk(tree, function (element) {
 		switch (element.type) {
 		case 'org':
@@ -353,16 +506,16 @@ function data(tree) {
 }
 
 function compile(tree) {
-	balance(tree);
-	flatten(tree);
-	console.log(JSON.stringify(tree, null, 4));
-	return ;
-
 	var estimates = {};
-	tree = replacementStage(tree);
+	balance(tree);			// Order expression stage
+	tree = replace(tree);	// Replace macros and equates
+	mark(tree);				// Mark expressions which will resolve to an integer at compile time
+	verify(tree);			// Run some sanity checks
+
+	// TODO: BREAK DOWN COMPLEX INSTRUCTIONS
 
 	// Until all our expressions have been resolved
-	while (defined(tree).length > 0) {
+	while (identifiers(tree) > 0) {
 		estimate(tree, estimates);
 
 		// Locate all our keys that have no-delta in minimums and maximum
@@ -377,9 +530,12 @@ function compile(tree) {
 		}, {});
 
 		// Replace and flatten the tree
-		replace(tree, keys);
+		define(tree, keys);
 		flatten(tree);
 	}
+
+	//console.log(JSON.stringify(tree,null,4));
+	process.exit(-1);
 
 	return data(tree);
 }
