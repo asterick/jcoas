@@ -346,6 +346,26 @@ function flatten(tree) {
 			throw new Error("Strings are not allowed in " + element.type + "blocks");
 
 		case 'binary':
+			if (element.operation === '#') {
+				// Convert to machine operation here
+				return flatten({
+					type: "binary",
+					operation: "|",
+					left: {
+						type: "binary",
+						operation: "&",
+						left: element.left,
+						right: { type: "number", value: 255 }
+					},
+					right: {
+						type: "binary",
+						operation: "<<",
+						left: element.right,
+						right: { type: "number", value: 8 }
+					}
+				});
+			}
+
 			if (element.left.type === 'number' &&
 				element.right.type === 'number') {
 
@@ -355,7 +375,7 @@ function flatten(tree) {
 						"+": function(l,r) { return l+r; },
 						"-": function(l,r) { return l-r; },
 						"*": function(l,r) { return l*r; },
-						"/": function(l,r) { return l/r; },
+						"/": function(l,r) { return Math.floor(l/r); },
 						"%": function(l,r) { return l%r; },
 						"<<": function(l,r) { return l<<r; },
 						">>": function(l,r) { return l>>r; },
@@ -363,8 +383,7 @@ function flatten(tree) {
 						"&&": function(l,r) { return l&&r; },
 						"^": function(l,r) { return l^r; },
 						"|": function(l,r) { return l|r; },
-						"&": function(l,r) { return l&r; },
-						"#": function(l,r) { return (l & 0xFF) | ((r&0xFF) << 8); }
+						"&": function(l,r) { return l&r; }
 					}[element.operation])(element.left.value, element.right.value)
 				};
 
@@ -509,6 +528,7 @@ function compile(tree) {
 	var estimates = {};
 	balance(tree);			// Order expression stage
 	tree = replace(tree);	// Replace macros and equates
+	flatten(tree);			// Flatten as much as possible before evaluation for speed
 	mark(tree);				// Mark expressions which will resolve to an integer at compile time
 	verify(tree);			// Run some sanity checks
 

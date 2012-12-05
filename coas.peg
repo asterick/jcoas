@@ -48,7 +48,7 @@ data_block
 		i;
 
 		switch (data_type) {
-			case '.little':
+			case 'little':
 				for(i = 0; i < args.length; i += 2) {
 					remap.push({
 						type: "binary",
@@ -58,7 +58,7 @@ data_block
 					});
 				}
 				break ;
-			case '.big':
+			case 'big':
 				for(i = 0; i < args.length; i += 2) {
 					remap.push({
 						type: "binary",
@@ -77,10 +77,10 @@ data_block
 	}
 
 data_type
-	= ".data"i _
-	/ ".dat"i _
-	/ ".big"i _
-	/ ".little"i _
+	= ".data"i _ { return "word"; }
+	/ ".dat"i _ { return "word"; }
+	/ ".big"i _ { return "big"; }
+	/ ".little"i _ { return "little"; }
 
 include_types
 	= ".include"i _ {
