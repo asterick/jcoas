@@ -345,6 +345,9 @@ function flatten(tree) {
 		case 'string':
 			throw new Error("Strings are not allowed in " + element.type + "blocks");
 
+		case 'paren':
+			return element.value;
+
 		case 'binary':
 			if (element.operation === '#') {
 				// Convert to machine operation here
@@ -554,7 +557,7 @@ function compile(tree) {
 		flatten(tree);
 	}
 
-	//console.log(JSON.stringify(tree,null,4));
+	console.log(JSON.stringify(tree,null,4));
 	process.exit(-1);
 
 	return data(tree);

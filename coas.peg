@@ -165,14 +165,14 @@ expression
 	/ short_exp
 
 short_exp
-	= "(" _ o:expression ")" _ { return { line: line, column: column, type: "paren", value: o }; }
-	/ "[" _ e:expression "]" _ { return { line: line, column: column, type: "indirect", value: e } }
-	/ op:unary_op _ t:short_exp { return { line: line, column: column, type: "unary", operation: op, value: t } }
+	= n:number { return { line: line, column: column, weight: 1, type: "number", value:n } }
 	/ s:string { return { line: line, column: column, type: "string", value:s } }
-	/ n:number { return { line: line, column: column, weight: 1, type: "number", value:n } }
 	/ c:character { return { line: line, column: column, weight: 1, type: "number", value:c } }
 	/ r:register ![_a-z0-9]i _ { return { line: line, column: column, weight: 3, type: "register", name:r } }
 	/ i:identifier { return { line: line, column: column, weight: 2, type: "identifier", name:i.toUpperCase() } }
+	/ "(" _ o:expression ")" _ { return { line: line, column: column, type: "paren", value: o }; }
+	/ "[" _ e:expression "]" _ { return { line: line, column: column, type: "indirect", value: e } }
+	/ op:unary_op _ t:short_exp { return { line: line, column: column, type: "unary", operation: op, value: t } }
 
 // Operators
 binary_op
@@ -234,7 +234,9 @@ register
 	/ "pc"i { return "PC"; }
 	/ "sp"i { return "SP"; }
 	/ "ex"i { return "EX"; }
+	/ "[" _ "--" _ "sp"i _ "]" { return "PUSH"; }
 	/ "push"i { return "PUSH"; }
+	/ "[" _ "sp"i _ "++" _ "]" { return "POP"; }
 	/ "pop"i { return "POP"; }
 
 identifier
