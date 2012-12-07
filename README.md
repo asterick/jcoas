@@ -34,6 +34,8 @@ JCOAS attempts for follow notch style syntax with a few notable exceptions
 4. "MOV" is an alias for "SET" (Short hand)
 5. Complex expressions are permitted
 6. Comments may use C-style (// ... \n, /* ... */), or DASM style (; ... \n)
+7. Macros and equations are scoped in .proc blocks
+8. labels prefixed with an underscore (_) are scoped in .proc blocks
 
 ###EXAMPLE
     .org 0x1000 ; Code should be relative to 0x1000, does not include actual code
@@ -50,26 +52,74 @@ JCOAS attempts for follow notch style syntax with a few notable exceptions
 
 ##Directives
 
-###Substituion
-These are macro / replacement style directives
+<table>
+   <tr>
+      <th colspan=3>Substituion</th>
+   </tr> 
+   <tr>
+      <th>.equ</tg>
+      <td>&lt;name&gt; &lt;value&gt;</td>
+      <td>Create constant replacement</td>
+   </tr>
+   <tr>
+      <th>.macro</tg>
+      <td>&lt;name&gt; &lt;argument&gt; [, &lt;argument&gt; ...] ... <b>.end</b></td>
+      <td>Create a block replacement directive (macro)</td>
+   </tr>
 
-* .equ <name> <expression>
-* .macro <name> ... .end
+   <tr>
+      <th colspan=3>Inclusion</th>
+   </tr> 
+   <tr>
+      <th>.include</tg>
+      <td>&lt;filename&gt;</td>
+      <td>Insert file as raw assembly</td>
+   </tr>
+   <tr>
+      <th>.incbig</tg>
+      <td>&lt;filename&gt;</td>
+      <td>Insert file as .DAT block, file encoded as big-endian words</td>
+   </tr>
+   <tr>
+      <th>.inclittle</tg>
+      <td>&lt;filename&gt;</td>
+      <td>Insert file as .DAT block, file encoded as little-endian words</td>
+   </tr>
+   <tr>
+      <th>.incbytes</tg>
+      <td>&lt;filename&gt;</td>
+      <td>Insert file as .DAT block, file encoded as bytes</td>
+   </tr>
 
-###Inclusion
-These operate on your filesystem to include additional filesfiles
-
-* .include
-* .incbytes
-* .incbig
-* .inglittle
-
-###Flow Control
-
-* .org
-* .bss
-* .align
-* .proc
+   <tr>
+      <th colspan=3>Flow control</th>
+   </tr> 
+   <tr>
+      <th>.org</tg>
+      <td>&lt;location&gt;</td>
+      <td>Set baseline for code positions</td>
+   </tr>
+   <tr>
+      <th>.align</tg>
+      <td>&lt;bias&gt;</td>
+      <td>Align next value to an N*size word boundary</td>
+   </tr>
+   <tr>
+      <th>.bss</tg>
+      <td>&lt;size&gt;</td>
+      <td>Allocate a zero fill block</td>
+   </tr>
+   <tr>
+      <th>.data</tg>
+      <td>data [, data ...]</td>
+      <td>Insert raw word data</td>
+   </tr>
+   <tr>
+      <th>.proc</tg>
+      <td>... <b>.end</b></td>
+      <td>Create a proceedure block scope for labels, EQUs and MACROs</td>
+   </tr>
+</table>
 
 ##Expressions
 **NOTE: Stack, PC and EX registers may NOT be referenced in complex expressions**
