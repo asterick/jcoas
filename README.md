@@ -246,16 +246,9 @@ As a rule of thumb, the expression builder will use
     </tr>
     <tr>
         <th colspan=2>&amp;</th>
-        <td>Address-relative operation (relocatable) <b>NOT CURRENTLY IMPLEMENTED, TREATED AS NOP</b></td>
+        <td>Address-relative operation (relocatable) <b>NOT CURRENTLY IMPLEMENTED</b></td>
     </tr>
 </table>
 
 ###Example
     MOV [C*9], [B*100+A]
-
-
-##Things Left Todo
-* Capture PEG parser errors and produce more friendly warnings
-* Better assembler error output
-* Do shifter optimizations when possible (MUL A, 2 -> SHL A, 1)
-* Implement the relative offset (&) operator
