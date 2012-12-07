@@ -166,6 +166,10 @@ function source(tree) {
 			return "\t.DATA " + element.arguments.join(", ");
 		case 'unary':
 			return "(" + element.operation + element.value + ")";
+		case 'org':
+		case 'bss':
+		case 'align':
+			return "\t." +element.type + " " + element.value;
 		default:
 			throw new Error(element.type);
 		}
@@ -1097,37 +1101,54 @@ function assemble(tree) {
 	}
 
 	return walk(tree, function (element) {
-		// Ignore non-operations and incompletes
-		if (element.type !== 'operation' || count(element, 'identifier') > 0) { 
-			return ;
+		switch (element.type) {
+		// Allocation space
+		case 'bss':
+			// Ignore non-operations and incompletes
+			if (count(element, 'identifier') > 0) { 
+				break ;
+			}
+
+			var zeros = _.range(element.value.value).map(function() { return {type:"number", value:0}; });
+
+			return {
+				type: "data",
+				arguments: zeros
+			};
+		// Instructions
+		case 'operation':
+			// Ignore non-operations and incompletes
+			if (count(element, 'identifier') > 0) { 
+				break ;
+			}
+
+			var instruction = INSTRUCTIONS[element.name],
+				fields = element.arguments.map(field),
+				immediates = _.chain(fields).pluck('immediate').filter(function(v) {
+					return typeof v === "number";
+				}).map(function (v) {
+					return { type: 'number', value: v };
+				}).reverse().value(),
+				a, b, op;
+
+			if (instruction.length === 1) {
+				op = 0x1F;
+				a = instruction.code;
+				b = fields[0].field;
+			} else {
+				op = instruction.code;
+				a = fields[1].field;
+				b = fields[0].field;
+			}
+
+			// Convert instruction to a data-block
+			return {
+				type: 'data',
+				arguments: [
+					{ type: "number", value: op | (a << 5) | (b << 10)}
+				].concat(immediates)
+			};
 		}
-
-		var instruction = INSTRUCTIONS[element.name],
-			fields = element.arguments.map(field),
-			immediates = _.chain(fields).pluck('immediate').filter(function(v) {
-				return typeof v === "number";
-			}).map(function (v) {
-				return { type: 'number', value: v };
-			}).reverse().value(),
-			a, b, op;
-
-		if (instruction.length === 1) {
-			op = 0x1F;
-			a = instruction.code;
-			b = fields[0].field;
-		} else {
-			op = instruction.code;
-			a = fields[1].field;
-			b = fields[0].field;
-		}
-
-		// Convert instruction to a data-block
-		return {
-			type: 'data',
-			arguments: [
-				{ type: "number", value: op | (a << 5) | (b << 10)}
-			].concat(immediates)
-		};
 	});
 }
 
