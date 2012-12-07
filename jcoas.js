@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+"use strict";
 
 var pegjs = require("pegjs"),
 	fs = require("fs"),
@@ -192,6 +193,26 @@ function relabel(tree) {
 
 function balance(tree) {
 	return walk(tree, function (node) {
+		function foldUp(index) {
+			var operation = operations[index],
+				left = values[operation.index],
+				right = values[operation.index+1];
+
+			operations.splice(index, 1);
+			values.splice(operation.index, 2, {
+				type: "binary",
+				operation: (index > 0 && first.reorder === 'partial') ? first.inverse : first.operation,
+				column: left.column,
+				line: left.line,
+				left: left,
+				right: right
+			});
+
+			operations.forEach(function (o) {
+				if (o.index >= operation.index) { o.index--; }
+			});
+		}
+
 		if (node.type !== "unordered") {
 			return ;
 		}
@@ -229,26 +250,6 @@ function balance(tree) {
 				operations[end].operation === first.operation &&
 				(operations[end].index - index) === end) { 
 				end++; 
-			}
-
-			function foldUp(index) {
-				var operation = operations[index],
-					left = values[operation.index],
-					right = values[operation.index+1];
-
-				operations.splice(index, 1);
-				values.splice(operation.index, 2, {
-					type: "binary",
-					operation: (index > 0 && first.reorder === 'partial') ? first.inverse : first.operation,
-					column: left.column,
-					line: left.line,
-					left: left,
-					right: right
-				});
-
-				operations.forEach(function (o) {
-					if (o.index >= operation.index) { o.index--; }
-				});
 			}
 
 			// Group registers together (when allowed)
@@ -932,16 +933,6 @@ function estimate(tree, estimates) {
 	});
 }
 
-function data(tree) {
-	var output = [];
-	walk(tree, function (element) {
-		if(element.type !== 'data') { return ; }
-		
-		output = output.concat(_.pluck(element.arguments, 'value'));
-	});
-	return output;
-}
-
 function assemble(tree) {
 	var REGISTERS = {
 		"A": 0, "B": 1, "C": 3, "X": 4,
@@ -1038,6 +1029,16 @@ function assemble(tree) {
 			].concat(immediates)
 		};
 	});
+}
+
+function data(tree) {
+	var output = [];
+	walk(tree, function (element) {
+		if(element.type !== 'data') { return ; }
+		
+		output = output.concat(_.pluck(element.arguments, 'value'));
+	});
+	return output;
 }
 
 function build(tree) {
