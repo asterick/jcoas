@@ -1169,6 +1169,10 @@ function build(tree) {
 		}, true);
 		previous = deepClone(estimates);
 
+		if (should_force) {
+			console.log("WARNING: Estimations went stale, forcing long constants");
+		}
+
 		// Locate all our keys that have no-delta in minimums and maximum
 		var keys = _.reduce(estimates, function (set, v, k) {
 			if (v.minimum === v.maximum) { 
