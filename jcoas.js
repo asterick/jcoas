@@ -1136,12 +1136,19 @@ function assemble(tree) {
 }
 
 function data(tree) {
-	var output = [];
+	var data = [],
+		output;
 	walk(tree, function (element) {
 		if(element.type !== 'data') { return ; }
 		
-		output = output.concat(_.pluck(element.arguments, 'value'));
+		data = data.concat(_.pluck(element.arguments, 'value'));
 	});
+
+	output = new Buffer(data.length*2);
+	data.forEach(function(word, i) {
+		output.writeInt16BE(word & 0xFFFF,i*2);
+	});
+
 	return output;
 }
 
@@ -1179,13 +1186,16 @@ function build(tree) {
 		// TODO: IF LOOP GOES STALE, WE SHOULD BREAK OUT AND JUST FORCE LONG LITERALS
 	} while (count(tree, 'operation') > 0);
 
-	console.log(source(tree)); // TEMP: Output generated source
-
 	return data(tree);
 }
 
 var parsed = options._.reduce(function (list, f) {
 		return list.concat(global.parser.parse(fs.readFileSync(f, "utf8")));
-	}, []);
+	}, []),
+	result = build(parsed);
 
-build(parsed);
+console.log((result.length/2).toString(), "words assembled.")
+
+if (options.o) {
+	fs.writeFileSync(options.o, result);
+}
