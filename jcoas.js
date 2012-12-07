@@ -485,6 +485,22 @@ function verify(tree) {
 			if (opcode.length !== element.arguments.length) {
 				throw new Error("Argument count mismatch");
 			}
+
+			element.arguments.forEach(function (exp, i) {
+				var last = (i === element.arguments.length - 1),
+					bad = last ? "PUSH" : "POP";
+
+				walk(exp, function (e) {
+					if (!last && e.integer) {
+						throw new Error("Cannot use integer values as a left-hand argument");
+					}
+
+					if (e.type === "register" && e.name === bad) {
+						throw new Error("Cannot use " + bad + "on this instruction");
+					}
+				});
+			})
+
 			break ;
 		case 'org':
 		case 'align':
@@ -876,29 +892,16 @@ function estimate(tree, estimates) {
 		return number + (offset ? bias - offset : 0);
 	}
 
-	function quickGuess(expression) {
-	}
-
 	function instruction(element) {
-		var instruction = INSTRUCTIONS[element.name],
-			guess = element.arguments.reduce(function (t, element) {
-				if (element.type !== 'register' &&
-					(element.type !== 'indirect' || element.value.type !== 'register')) 
-				{
-					t.maximum++;
-				}
-				return t;
-			}, {"minimum": 1, "maximum": 1});
+		var instruction = INSTRUCTIONS[element.name];
 
 		// TODO: ESTIMATE SIZE OF THE OPERATION HERE
-		// TODO: ACTUAL ESTIMATION HERE
-		// TODO: CONVERT TO DATA IF LENGTH IS FIXED
+		// METHOD: IF ALL ARGUMENTS HAVE AN ESTIMATE, GUESS SIZE
+		//			... OTHERWISE ALL OPTIONS EXIST
+		// NOTE: IF LOOP GOES STALE, WE SHOULD BREAK OUT AND JUST FORCE LONG LITERALS
 
-		//console.log(element);
-		//process.exit(-1);
-
-		minimum += element.arguments.length;
-		maximum += element.arguments.length;
+		minimum += 1;
+		maximum += instruction.length;
 		return element;
 	}
 
@@ -999,8 +1002,6 @@ function assemble(tree) {
 			return ;
 		}
 
-		// TODO: YELL AT PEOPLE USING POP / PUSH WRONG
-
 		var instruction = INSTRUCTIONS[element.name],
 			fields = element.arguments.map(field),
 			immediates = _.chain(fields).pluck('immediate').filter(function(v) {
@@ -1071,6 +1072,9 @@ function build(tree) {
 
 		// Finally, convert finished instructions to DATA blocks
 		tree = assemble(tree);
+
+		console.log(estimates);
+		process.exit(-1);
 	} while (count(tree, 'operation') > 0);
 
 	console.log(source(tree)); // TEMP: Output generated source
