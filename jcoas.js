@@ -6,6 +6,8 @@ var pegjs = require("pegjs"),
 	optimist = require("optimist")
 		.usage("Usage: $0 [assembly files]")
 		.describe("o", "Output resource")
+		.describe("x", "Allow expressions")
+		.default("x", "true")
 		.alias("o", "output");
 
 var options = optimist.argv;
@@ -139,6 +141,8 @@ function walk(element, callback) {
 }
 
 function source(tree) {
+	if (!Array.isArray(tree)) { tree = [tree]; }
+
 	return walk(deepClone(tree), function (element) {
 		switch (element.type) {
 		case 'label':
@@ -583,6 +587,8 @@ function breakdown(tree) {
 		// This is a non-complex instruction, does not need a breakdown stage
 		if (_.every(element.arguments, base)) {
 			return list.concat(element);
+		} else if (options.x.toLowerCase() === "false") {
+			throw new Error("Complex expression in: " + source(element));
 		}
 
 		// Check to see if this uses indexed-complex and stack together
@@ -767,7 +773,6 @@ function breakdown(tree) {
 		
 		// Restore the stack
 		if (preserve_stack) {
-			
 			if (depth) {
 				output.push({
 					type: "operation",
@@ -826,14 +831,14 @@ function breakdown(tree) {
 	}, []);
 }
 
-function identifiers(tree) {
-	var unresolved = 0;
+function count(tree, type) {
+	var total = 0;
 
 	walk(tree, function(element) {
-		if (element.identifier) { unresolved++; }
+		if (element.type === type) { total++; }
 	});
 
-	return unresolved;
+	return total;
 }
 
 function estimate(tree, estimates) {
@@ -850,6 +855,9 @@ function estimate(tree, estimates) {
 		// TODO: ESTIMATE SIZE OF THE OPERATION HERE
 		// TODO: ACTUAL ESTIMATION HERE
 		// TODO: CONVERT TO DATA IF LENGTH IS FIXED
+
+		console.log(element);
+		process.exit(-1);
 
 		minimum += element.arguments.length;
 		maximum += element.arguments.length;
@@ -904,10 +912,11 @@ function compile(tree) {
 	tree = breakdown(tree);	// Attempt to breakdown expressions
 
 	console.log(source(tree)); // TEMP: Output generated source
+	console.log("----------");
 
 	// Until all our expressions have been resolved
 	var estimates = {};
-	while (identifiers(tree) > 0) {
+	do {
 		estimate(tree, estimates);
 
 		// Locate all our keys that have no-delta in minimums and maximum
@@ -924,7 +933,7 @@ function compile(tree) {
 		// Replace and flatten the tree
 		define(tree, keys);
 		flatten(tree);
-	}
+	} while (count(tree, 'operation') > 0);
 
 	console.log(source(tree)); // TEMP: Output generated source
 
