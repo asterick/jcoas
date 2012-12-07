@@ -19,7 +19,7 @@ if (options._.length < 1) {
 }
 
 global.parser = pegjs.buildParser(
-	fs.readFileSync("coas.peg", "utf8"), 
+	fs.readFileSync("jcoas.peg", "utf8"), 
 	{trackLineAndColumn: true});
 
 var INSTRUCTIONS = {
