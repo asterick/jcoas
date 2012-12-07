@@ -383,9 +383,6 @@ function replace(tree) {
 function flatten(tree) {
 	return walk(tree, function (element) {
 		switch (element.type) {
-		case 'operation':
-			// TODO: ACTUALLY FOLD UP INSTRUCTIONS THAT CAN BE FOLDED HERE
-			break ;
 		case 'string':
 			throw new Error("Strings are not allowed in " + element.type + "blocks");
 
@@ -1072,10 +1069,6 @@ function build(tree) {
 
 		// Finally, convert finished instructions to DATA blocks
 		tree = assemble(tree);
-		
-		// TEMPORARY: STOP AFTER FIRST STAGE
-		console.log(source(tree));
-		process.exit(-1);
 	} while (count(tree, 'operation') > 0);
 
 	console.log(source(tree)); // TEMP: Output generated source
