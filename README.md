@@ -234,7 +234,7 @@ As a rule of thumb, the expression builder will use
     </tr>
     <tr>
         <th colspan=2>&amp;</th>
-        <td>Address-relative operation (relocatable) **NOT CURRENTLY IMPLEMENTED, TREATED AS NOP**</td>
+        <td>Address-relative operation (relocatable) <b>NOT CURRENTLY IMPLEMENTED, TREATED AS NOP</b></td>
     </tr>
 </table>
 
