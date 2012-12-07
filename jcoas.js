@@ -347,7 +347,7 @@ function replace(tree) {
 
 				args = {};
 				macro.parameters.forEach(function(name, i){
-					args[name] = define(element.arguments[i], equates);
+					args[name] = element.arguments[i];
 				});
 
 				return list.concat(
@@ -448,7 +448,7 @@ function flatten(tree) {
 				value: ({
 					"-": function(v) { return -v; },
 					"~": function(v) { return ~v; },
-					"&": function(v) { return v; }
+					"&": function(v) { return v; }	// THIS DOES NOT DO WHAT IT SHOULD
 				}[element.operation])(element.value.value)
 			};
 		}
@@ -760,7 +760,7 @@ function breakdown(tree) {
 					});
 					break ;
 				default:
-					console.log(exp);
+					console.log("UNKNOWN EXPRESSION TERM: " + exp);
 					process.exit(-1);
 				}
 			}
@@ -882,9 +882,7 @@ function count(tree, type) {
 /**
  * Estimate the values of labels
  */
-function estimate(tree, estimates) {
-	// TODO: ALLOW FOR FORCING FUNCTION
-
+function estimate(tree, estimates, force) {
 	// These are our PC ranges
 	var minimum = 0,
 		maximum = 0,
@@ -951,9 +949,8 @@ function estimate(tree, estimates) {
 				return "no";
 			}
 
-			if (!has_estimates) {
-				return "maybe";
-			}
+			if (!has_estimates) { return "maybe"; }
+			if (force) { return "true"; }
 
 			value = field.value;
 			if (value.type === "binary") {
@@ -971,14 +968,13 @@ function estimate(tree, estimates) {
 					value = value.left;
 				}
 			}
-						
+
 			return range(value, [0]);
 		case 'binary':
 		case 'unary':
 		case 'identifier':
-			if (!has_estimates) {
-				return "maybe";
-			}
+			if (!has_estimates) { return "maybe"; }
+			if (force) { return "true"; }
 
 			return range(field, [0xFFFF].concat(_.range(0,30)));
 		case 'number':
@@ -1161,9 +1157,17 @@ function build(tree) {
 	tree = breakdown(tree);	// Attempt to breakdown expressions
 
 	// Until all our expressions have been resolved
-	var estimates;
+	var estimates, previous, should_force;
 	do {
-		estimates = estimate(tree, estimates);
+		estimates = estimate(tree, estimates, should_force);
+
+		should_force = _.reduce(estimates, function(acc, est, key) {
+			return acc && 
+				previous &&
+				previous[key].minimum == est.minimum &&
+				previous[key].maximum == est.maximum;
+		}, true);
+		previous = deepClone(estimates);
 
 		// Locate all our keys that have no-delta in minimums and maximum
 		var keys = _.reduce(estimates, function (set, v, k) {
@@ -1186,6 +1190,7 @@ function build(tree) {
 		// TODO: IF LOOP GOES STALE, WE SHOULD BREAK OUT AND JUST FORCE LONG LITERALS
 	} while (count(tree, 'operation') > 0);
 
+	console.log(source(tree));
 	return data(tree);
 }
 
