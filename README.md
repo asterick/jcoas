@@ -38,7 +38,7 @@ JCOAS attempts for follow notch style syntax with a few notable exceptions
 8. labels prefixed with an underscore (_) are scoped in .proc blocks
 
 ###EXAMPLE
-    .macro PUSH a
+    .macro PUSH(a)
         SET PUSH, a
     .end
 
@@ -75,7 +75,7 @@ or alter the flow control of the application.
     </tr>
     <tr>
         <th>.macro</tg>
-        <td>&lt;name&gt; &lt;argument&gt; [, &lt;argument&gt; ...] ... <b>.end</b></td>
+        <td>&lt;name&gt; ([&lt;arguments&gt; [, &lt;argument&gt; ...]]) ... <b>.end</b></td>
         <td>Create a block replacement directive (macro)</td>
     </tr>
 

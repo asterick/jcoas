@@ -156,7 +156,7 @@ identifier_list
 	= a:(identifier "," _)* b:identifier { return a.map(function(g) { return g[0]; }).concat(b); }
 
 expression_list
-	= a:(expression "," _)* b:expression { return a.map(function(g) { return g[0]; }).concat(b); }
+	= "(" _ a:(expression "," _)* b:expression? ")" _ { if(b) { return a.map(function(g) { return g[0]; }).concat(b); } else { return []; } }
 
 
 // Expressions
