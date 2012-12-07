@@ -30,21 +30,6 @@ global.parser = pegjs.buildParser(
 
 
 /**
- * Relabeler
- */
-
-var suffixIndex = 0;
-function relabel(tree) {
-	var suffix = "$"+(suffixIndex++);
-
-	return helper.walk(tree, function(element) {
-		if (element.name && element.name[0] === "_") {
-			element.name += suffix;
-		}
-	});
-}
-
-/**
  * Balancing stage
  */
 
@@ -168,6 +153,21 @@ function mark(tree) {
 		case 'unary':
 			element.integer = element.operation !== '&' && element.value.integer;
 			break ;
+		}
+	});
+}
+
+/**
+ * Relabeler
+ */
+
+var suffixIndex = 0;
+function relabel(tree) {
+	var suffix = "$"+(suffixIndex++);
+
+	return helper.walk(tree, function(element) {
+		if (element.name && element.name[0] === "_") {
+			element.name += suffix;
 		}
 	});
 }
