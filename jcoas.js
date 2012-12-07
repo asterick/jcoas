@@ -6,10 +6,13 @@ var pegjs = require("pegjs"),
 	_ = require("underscore"),
 	optimist = require("optimist")
 		.usage("Usage: $0 [assembly files]")
+		.describe("f", "Output format")
+		.alias("f", "format")
 		.describe("o", "Output resource")
+		.alias("o", "output")
 		.describe("x", "Allow expressions")
-		.default("x", "true")
-		.alias("o", "output");
+		.alias("x", "expressions")
+		.default("x", "true");
 
 var options = optimist.argv;
 
@@ -1152,7 +1155,7 @@ function assemble(tree) {
 	});
 }
 
-function data(tree) {
+function data(tree, little) {
 	var data = [],
 		output;
 	walk(tree, function (element) {
@@ -1163,7 +1166,7 @@ function data(tree) {
 
 	output = new Buffer(data.length*2);
 	data.forEach(function(word, i) {
-		output.writeInt16BE(word & 0xFFFF,i*2);
+		output[little?'writeInt16LE':'writeInt16BE'](word & 0xFFFF,i*2);
 	});
 
 	return output;
@@ -1183,11 +1186,11 @@ function build(tree) {
 		estimates = estimate(tree, estimates, should_force);
 
 		should_force = _.reduce(estimates, function(acc, est, key) {
-			return acc && 
+			return (acc === null ? true : acc) && 
 				previous &&
 				previous[key].minimum == est.minimum &&
 				previous[key].maximum == est.maximum;
-		}, true);
+		}, null);
 		previous = deepClone(estimates);
 
 		if (should_force) {
@@ -1211,12 +1214,9 @@ function build(tree) {
 
 		// Finally, convert finished instructions to DATA blocks
 		tree = assemble(tree);
-
-		// TODO: IF LOOP GOES STALE, WE SHOULD BREAK OUT AND JUST FORCE LONG LITERALS
 	} while (count(tree, 'operation') > 0);
 
-	console.log(source(tree));
-	return data(tree);
+	return tree;
 }
 
 var parsed = options._.reduce(function (list, f) {
@@ -1224,8 +1224,27 @@ var parsed = options._.reduce(function (list, f) {
 	}, []),
 	result = build(parsed);
 
-console.log((result.length/2).toString(), "words assembled.")
+console.log((data(result).length/2).toString(), "words assembled.")
 
 if (options.o) {
-	fs.writeFileSync(options.o, result);
+	switch (options.f) {
+	case 's':
+	case 'source':
+	case 'data':
+		fs.writeFileSync(options.o, source(result));
+		break ;
+	case 'l':
+	case 'little':
+	case "littleendian":
+		fs.writeFileSync(options.o, data(result, true));
+		break ;
+	case 'b':
+	case 'big':
+	case "bigendian":
+	default:
+		fs.writeFileSync(options.o, data(result));
+		break ;
+	}
+} else {
+	console.log(source(result));
 }

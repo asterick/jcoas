@@ -19,9 +19,12 @@ Currently JCOAS only provides you with a few options:
 
 1. An ordered list of assembly files (They will be concatinated to one another)
 2. Disabling / Enabling complex expression breakdown
-3. Specifying a Big-Endian binary (NOTCH order)
+3. Specifying an output file and format (defaults to source on console)
+    * "b" - Big-Endian binary
+    * "l" - Little-Endian binary
+    * "s" - Source "DATA" format
 
-Example:  `node jcoas.js -o binary.bin -x main.asm secondary.asm`
+Example:  `node jcoas.js -f b -o binary.bin -x main.asm secondary.asm`
 
 ##Assembler Syntax
 **NOTE: JCOAS is neither case, nor whitespace sensitive**
@@ -256,6 +259,4 @@ As a rule of thumb, the expression builder will use
 * Do shifter optimizations when possible (MUL A, 2 -> SHL A, 1)
 * Better assembler error output
 * Implement the relative offset (&) operator
-* Implement more output formats
-* Do not throw stale warning when no identifiers are used
 * Allow zero-argument macros
