@@ -12,7 +12,10 @@ var pegjs = require("pegjs"),
 		.alias("o", "output")
 		.describe("x", "Allow expressions")
 		.alias("x", "expressions")
-		.default("x", "true");
+		.default("x", "true"),
+	constants = require("./constants.js"),
+	breakdown = require("./breakdown.js").breakdown,
+	helper = require("./helper.js");
 
 var options = optimist.argv;
 
@@ -25,159 +28,6 @@ global.parser = pegjs.buildParser(
 	fs.readFileSync("jcoas.peg", "utf8"), 
 	{trackLineAndColumn: true});
 
-var INSTRUCTIONS = {
-	// 2-OP characters
-	"SET" : { "code": 0x01, "length": 2 },
-	"MOV" : { "code": 0x01, "length": 2 },
-
-	"ADD" : { "code": 0x02, "length": 2, "carry": true },
-	"SUB" : { "code": 0x03, "length": 2, "carry": true },
-	"MUL" : { "code": 0x04, "length": 2, "carry": true },
-	"MLI" : { "code": 0x05, "length": 2, "carry": true },
-	"DIV" : { "code": 0x06, "length": 2, "carry": true },
-	"DVI" : { "code": 0x07, "length": 2, "carry": true },
-	"MOD" : { "code": 0x08, "length": 2 },
-	"MDI" : { "code": 0x09, "length": 2 },
-	"AND" : { "code": 0x0a, "length": 2 },
-	"BOR" : { "code": 0x0b, "length": 2 },
-	"XOR" : { "code": 0x0c, "length": 2 },
-
-	"SHR" : { "code": 0x0d, "length": 2, "carry": true },
-	"ASR" : { "code": 0x0e, "length": 2, "carry": true },
-	"SHL" : { "code": 0x0f, "length": 2, "carry": true },
-
-	"IFB" : { "code": 0x10, "length": 2 },
-	"IFC" : { "code": 0x11, "length": 2 },
-	"IFE" : { "code": 0x12, "length": 2 },
-	"IFN" : { "code": 0x13, "length": 2 },
-	"IFG" : { "code": 0x14, "length": 2 },
-	"IFA" : { "code": 0x15, "length": 2 },
-	"IFL" : { "code": 0x16, "length": 2 },
-	"IFU" : { "code": 0x17, "length": 2 },
-
-	"ADX" : { "code": 0x1a, "length": 2, "carry": true, "volatile": true },
-	"SBX" : { "code": 0x1b, "length": 2, "carry": true, "volatile": true },
-
-	"STI" : { "code": 0x1e, "length": 2 },
-	"STD" : { "code": 0x1f, "length": 2 },
-	// 1-OP characters
-	"JSR" : { "code": 0x01, "length": 1 },
-	"INT" : { "code": 0x08, "length": 1 },
-	"IAG" : { "code": 0x09, "length": 1 },
-	"IAS" : { "code": 0x0a, "length": 1 },
-	"RFI" : { "code": 0x0b, "length": 1 },
-	"IAQ" : { "code": 0x0c, "length": 1 },
-	"HWN" : { "code": 0x10, "length": 1 },
-	"HWQ" : { "code": 0x11, "length": 1 },
-	"HWI" : { "code": 0x12, "length": 1 }
-	};
-
-/**
- * Deep copy object
- */
-function deepClone(obj) {
-	if (Array.isArray(obj)) { return obj.map(deepClone); }
-	if (obj === null) { return null; }
-
-	switch (typeof obj) {
-		case 'object':
-			return _.reduce(obj, function (memo, v, k) {
-				memo[k] = deepClone(v);
-				return memo;
-			}, {});
-		case 'function':
-		case 'number':
-		case 'string':
-		case 'boolean':
-		case 'undefined':
-			return obj;
-	}
-}
-
-function walk(element, callback) {
-	if (Array.isArray(element)) {
-		return element.reduce(function(list, e) {
-			return list.concat(walk(e, callback));
-		}, []);
-	}
-
-	switch (element.type) {
-		case 'unordered':
-			// This is a special case, due to the fact that it should be processed in reverse order
-			var e = callback(element) || element;
-			if (e !== element) { return walk(e, callback); }
-
-			e.left = walk(e.left, callback);
-			e.right = walk(e.right, callback);
-			return e;
-		case 'unary':
-		case 'paren':
-			element.value = walk(element.value, callback);
-			break ;
-		case 'binary':
-			element.right = walk(element.right, callback);
-			element.left = walk(element.left, callback);
-			break ;
-		case 'operation':
-		case 'data':
-			element.arguments = walk(element.arguments, callback);
-			break ;
-		case 'align':
-		case 'bss':
-		case 'org':
-		case 'equate':
-		case 'indirect':
-			element.value = walk(element.value, callback);
-			break ;
-		case 'proc':
-		case 'macro':
-			element.contents = walk(element.contents, callback);
-			break ;
-		case 'register':
-		case 'identifier':
-		case 'number':
-		case 'string':
-		case 'label':
-			break ;
-		default:
-			throw "UNHANDLED ELEMENT:" + JSON.stringify(element);
-	}
-
-	return callback(element) || element;
-}
-
-function source(tree) {
-	if (!Array.isArray(tree)) { tree = [tree]; }
-
-	return walk(deepClone(tree), function (element) {
-		switch (element.type) {
-		case 'label':
-			return element.name + ":";
-		case 'register':
-			return element.name;
-		case 'number':
-			return element.value.toString(10);
-		case 'operation':
-			return "\t" + element.name + " " + element.arguments.join(", ");
-		case 'binary':
-			return "(" + element.left + element.operation + element.right + ")";
-		case 'indirect':
-			return "[" + element.value + "]";
-		case 'identifier':
-			return element.name;
-		case 'data':
-			return "\t.DATA " + element.arguments.join(", ");
-		case 'unary':
-			return "(" + element.operation + element.value + ")";
-		case 'org':
-		case 'bss':
-		case 'align':
-			return "\t." +element.type + " " + element.value;
-		default:
-			throw new Error(element.type);
-		}
-	}).join("\n");
-}
 
 /**
  * Relabeler
@@ -187,7 +37,7 @@ var suffixIndex = 0;
 function relabel(tree) {
 	var suffix = "$"+(suffixIndex++);
 
-	return walk(tree, function(element) {
+	return helper.walk(tree, function(element) {
 		if (element.name && element.name[0] === "_") {
 			element.name += suffix;
 		}
@@ -199,7 +49,7 @@ function relabel(tree) {
  */
 
 function balance(tree) {
-	return walk(tree, function (node) {
+	return helper.walk(tree, function (node) {
 		function foldUp(index) {
 			var operation = operations[index],
 				left = values[operation.index],
@@ -303,7 +153,7 @@ function balance(tree) {
  */
 
 function mark(tree) {
-	return walk(tree, function (element) {
+	return helper.walk(tree, function (element) {
 		switch(element.type) {
 		case 'indirect':
 			element.integer = false;
@@ -326,10 +176,10 @@ function mark(tree) {
  * Replace .macro and .equ 
  */
 function define(tree, set) {
-	return walk(tree, function(element) {
+	return helper.walk(tree, function(element) {
 		// Replace identifiers
 		if (element.type === 'identifier' && set[element.name]) {
-			return deepClone(set[element.name]);
+			return helper.deepClone(set[element.name]);
 		}
 	})
 }
@@ -359,7 +209,7 @@ function replace(tree) {
 
 				return list.concat(
 					define(
-						define(deepClone(macro.contents), args), 
+						define(helper.deepClone(macro.contents), args), 
 						equates)
 					);
 
@@ -388,7 +238,7 @@ function replace(tree) {
  */
 
 function flatten(tree) {
-	return walk(tree, function (element) {
+	return helper.walk(tree, function (element) {
 		switch (element.type) {
 		case 'string':
 			throw new Error("Strings are not allowed in " + element.type + "blocks");
@@ -470,7 +320,7 @@ function verify(tree) {
 	var detected = [],
 		defined = [];
 
-	walk(tree, function(element) {
+	helper.walk(tree, function(element) {
 		switch (element.type) {
 		case 'string':
 			throw new Error("Strings are not allowed in " + element.type + "blocks");
@@ -483,7 +333,7 @@ function verify(tree) {
 			});
 			break ;
 		case 'operation':
-			var opcode = INSTRUCTIONS[element.name];
+			var opcode = constants.INSTRUCTIONS[element.name];
 
 			if (!opcode) {
 				throw new Error("Unrecognized opcode: " + element.name);
@@ -497,7 +347,7 @@ function verify(tree) {
 				var last = (i === element.arguments.length - 1),
 					bad = last ? "PUSH" : "POP";
 
-				walk(exp, function (e) {
+				helper.walk(exp, function (e) {
 					if (!last && e.integer) {
 						throw new Error("Cannot use integer values as a left-hand argument");
 					}
@@ -531,355 +381,10 @@ function verify(tree) {
 	}
 }
 
-function breakdown(tree) {
-	var INDEXABLE = ["A","B","C","X","Y","Z","I","J","SP"];
-
-	// Determine which registers are available
-	function usingStack(tree) {
-		var stack = false;
-		walk(tree, function (element) {
-			if (element.type === "register" &&
-				(element.name === "POP" ||
-				element.name === "SP" ||
-				element.name === "PUSH")) {
-				stack = true;
-			}
-		});
-		return stack;
-	}
-
-	function safe (tree) {
-		var registers = ["SP"];
-		
-		walk(tree, function (element) {
-			if (element.type === 'register') {
-				registers.push(element.name);
-			}
-		})
-		
-		return _.difference(INDEXABLE, registers);
-	}
-
-	function indexed (tree, safe) {
-		var indirect = false;
-		walk(tree, function (element) {
-			switch (element.type) {
-			case "register":
-				if (safe) { return ; }
-			
-				if (element.name === "EX" ||
-					element.name === "POP" ||
-					element.name === "SP" ||
-					element.name === "PC" ||
-					element.name === "PUSH") {
-					throw new Error("Cannot use EX, PC or Stack in complex expressions.");
-				}
-				break ;
-			case "indirect":
-				indirect = true;
-			}
-		});
-		return indirect;
-	}
-	
-	// Determine if an expression needs further breakdown
-	function base (expression) {
-		var value;
-		
-		switch (expression.type) {
-		case 'register':	// r0-r7, ex, pc, sp, push, pop
-			// Registers are always a valid source / target
-			return true;
-		case 'indirect':
-			value = expression.value;
-			// We can directly index whitelisted registers and 
-			if (value.integer ||
-				(value.type === "register" &&
-				INDEXABLE.indexOf(value.name) >= 0)) {
-				return true ;
-			}
-
-			// Is it an indexed register?
-			if (value.type === 'binary' && (
-				value.operation === "+" ||
-				value.operation === "-"
-				)) {
-				// 
-				if (value.right.integer &&
-					value.left.type === "register" &&
-					INDEXABLE.indexOf(value.left.name) >= 0) {
-					return true;
-				} else if (value.operation === "+" && 
-					value.left.integer &&
-					value.right.type === "register" &&
-					INDEXABLE.indexOf(value.right.name) >= 0) {
-					return true;
-				}
-			}
-			return false;
-		default:
-			// Anything that resolves to an integer is valid
-			return expression.integer;
-		}
-	}
-
-	return tree.reduce(function (list, element) {
-		// We do not transform directives / labels
-		if (element.type != "operation") {
-			return list.concat(element);
-		}
-
-		// This is a non-complex instruction, does not need a breakdown stage
-		if (_.every(element.arguments, base)) {
-			return list.concat(element);
-		} else if (options.x.toLowerCase() === "false") {
-			throw new Error("Complex expression in: " + source(element));
-		}
-
-		// Check to see if this uses indexed-complex and stack together
-		var stackBased = false,
-			indexedComplex = false;
-
-		element.arguments.forEach(function (e) {
-			stackBased = stackBased || usingStack(e);
-
-			indexedComplex = indexedComplex ||
-				(indexed(e, true) && !base(e));
-		});
-
-		if (stackBased && indexedComplex) {
-			throw new Error("Cannot combine Stack with Indexed complex expressions");
-		}
-
-		// Find a safe register to use for preservation
-		var instruction = INSTRUCTIONS[element.name],
-			preserve_stack = instruction.volatile || !instruction.carry,
-			preserve_regs = [],
-			indexers = safe(element),
-			output = [],
-			depth = 0;
-
-		// Preserve our stack when nessessary
-		if (preserve_stack) {
-			output.push({
-				type: "operation",
-				name: "MOV",
-				arguments: [
-					{type:"register", name:"PUSH"},
-					{type:"register", name:"EX"}
-				]
-			});
-		}
-
-		element.arguments = element.arguments.map(function (exp, index) {
-			var last = index == (element.arguments.length - 1),
-				indirect,
-				indexer;
-
-			function reduce(tree) {
-				var BINARY_OPS = {
-					"+": "ADD",
-					"-": "SUB",
-					"*": "MLI",
-					"/": "DVI",
-					"%": "MDI",
-					"<<": "SHL",
-					">>>": "ASR",
-					">>": "SHR",
-					"^": "XOR",
-					"|": "BOR",
-					"&": "AND"
-				}, UNARY_OPS = {
-					"-": "MLI",
-					"~": "XOR"
-				}, temp;
-
-				
-				// Leaf node
-				if (base(tree)) {
-					output.push({
-						type: "operation",
-						name: "MOV",
-						arguments: [
-							{type:"register", name: "PUSH"},
-							tree
-						]
-					});
-					return ;
-				}
-
-				switch (tree.type) {
-				case 'indirect':
-					reduce(tree.value);
-					output.push({
-						type: "operation",
-						name: "MOV",
-						arguments: [
-							{type:"register", name: indexer},
-							{type:"register", name: "POP"}
-						]
-					});
-					output.push({
-						type: "operation",
-						name: "MOV",
-						arguments: [
-							{type:"register", name: "PUSH"},
-							{type:"indirect", value: {type:"register", name: indexer}}
-						]
-					});
-					break ;
-				case 'unary':
-					if(!UNARY_OPS[tree.operation]) {
-						throw new Error("Cannot handle unary operator: " + tree.operation);
-					}
-
-					reduce(tree.value);
-					output.push({
-						type: "operation",
-						name: UNARY_OPS[tree.operation],
-						arguments: [
-							{type:"indirect", value: {type:"register", name: "SP"}},
-							{type:"number", value: -1}
-						]
-					});
-					break ;
-				case 'binary':
-					if (!BINARY_OPS[tree.operation]) {
-						throw new Error("Cannot run-time execute operation " + tree.operation);
-					}
-
-					reduce(tree.left);
-					
-					if (base(tree.right)) {
-						temp = tree.right;
-					} else {
-						reduce(tree.right);
-						temp = {type:"register", name: "POP"};
-					}
-
-					output.push({
-						type: "operation",
-						name: BINARY_OPS[tree.operation],
-						arguments: [
-							{type:"indirect", value: {type:"register", name: "SP"}},
-							temp
-						]
-					});
-					break ;
-				default:
-					console.log("UNKNOWN EXPRESSION TERM: " + exp);
-					process.exit(-1);
-				}
-			}
-
-			if (!last) {
-				if (exp.type !== 'register' && exp.type !== 'indirect') {
-					throw new Error("Left-hand argument must be an address or register");
-				}
-			}
-
-			if (base(exp)) { return exp; }
-
-			indirect = indexed(exp);
-			indexer = indexed && indexers.pop();
-
-			if (indirect) {
-				if (!indexer) {
-					throw new Error("Not enough registers for indexers");
-				}
-				preserve_regs.push(indexer);
-			}
-
-			depth++;
-
-			if (last) {
-				reduce (exp);
-				return {
-					type: "register",
-					name: "POP"
-				}
-			} else {
-				reduce (exp.value);
-				
-				output.push({
-					type: "operation",
-					name: "MOV",
-					arguments: [
-						{type:"register", name: indexer},
-						{type:"register", name: "POP"}
-					]
-				});
-				
-				depth--;
-				exp.value = {type:"register", name: indexer};
-				return exp;
-			}
-		});
-		
-		// Restore the stack
-		if (preserve_stack) {
-			if (depth) {
-				output.push({
-					type: "operation",
-					name: "MOV",
-					arguments: [
-						{type:"register", name:"EX"},
-						{type:"indirect", value: {
-							type: "binary",
-							operation: "+",
-							left: {type:"register", name:"SP"},
-							right: {type:"number", value: depth}
-						}}
-					]
-				}, element, {
-					type: "operation",
-					name: "ADD",
-					arguments: [
-						{type:"register", name:"SP"},
-						{type:"number", value: depth}
-					]
-				});
-			} else {
-				output.push({
-					type: "operation",
-					name: "MOV",
-					arguments: [
-						{type:"register", name:"EX"},
-						{type:"indirect", value: {type:"register", name:"SP"}}
-						]
-				}, element);
-			}
-		} else {
-			output.push(element);
-		}
-
-		preserve_regs.forEach(function (r) {
-			output.unshift({
-				type: "operation",
-				name: "MOV",
-				arguments: [
-					{type:"register", name: "PUSH"},
-					{type:"register", name: r}
-				]
-			});
-			output.push({
-				type: "operation",
-				name: "MOV",
-				arguments: [
-					{type:"register", name: r},
-					{type:"register", name: "POP"}
-				]
-			});
-		});
-
-		return list.concat(output);
-	}, []);
-}
-
 function count(tree, type) {
 	var total = 0;
 
-	walk(tree, function(element) {
+	helper.walk(tree, function(element) {
 		if (element.type === type) { total++; }
 	});
 
@@ -902,7 +407,7 @@ function estimate(tree, estimates, force) {
 
 	function references(equation) {
 		var names = [];
-		walk(equation, function (e) {
+		helper.walk(equation, function (e) {
 			if (e.type === "identifier") {
 				names.push(e.name);
 			}
@@ -922,7 +427,7 @@ function estimate(tree, estimates, force) {
 
 		do {
 			// Calculate what our value should be now
-			i = flatten(define(deepClone(equation), values)).value & 0xFFFF;
+			i = flatten(define(helper.deepClone(equation), values)).value & 0xFFFF;
 
 			if (desired.indexOf(i) >= 0) {
 				short = true;
@@ -994,7 +499,7 @@ function estimate(tree, estimates, force) {
 	}
 
 	function instruction(element) {
-		var instruction = INSTRUCTIONS[element.name],
+		var instruction = constants.INSTRUCTIONS[element.name],
 			badEstimate = false;
 
 		minimum++; maximum++;
@@ -1011,7 +516,7 @@ function estimate(tree, estimates, force) {
 	// We need somewhere to put our estimates
 	estimates || (estimates = {});
 	
-	walk(tree, function (element) {
+	helper.walk(tree, function (element) {
 		switch (element.type) {
 		case 'org':
 			minimum = maximum = element.value.value;
@@ -1103,7 +608,7 @@ function assemble(tree) {
 		}
 	}
 
-	return walk(tree, function (element) {
+	return helper.walk(tree, function (element) {
 		switch (element.type) {
 		// Allocation space
 		case 'bss':
@@ -1125,7 +630,7 @@ function assemble(tree) {
 				break ;
 			}
 
-			var instruction = INSTRUCTIONS[element.name],
+			var instruction = constants.INSTRUCTIONS[element.name],
 				fields = element.arguments.map(field),
 				immediates = _.chain(fields).pluck('immediate').filter(function(v) {
 					return typeof v === "number";
@@ -1158,7 +663,7 @@ function assemble(tree) {
 function data(tree, little) {
 	var data = [],
 		output;
-	walk(tree, function (element) {
+	helper.walk(tree, function (element) {
 		if(element.type !== 'data') { return ; }
 		
 		data = data.concat(_.pluck(element.arguments, 'value'));
@@ -1178,7 +683,9 @@ function build(tree) {
 	tree = replace(tree);	// Replace macros and equates
 	mark(tree);				// Mark expressions which will resolve to an integer at compile time
 	verify(tree);			// Run some sanity checks
-	tree = breakdown(tree);	// Attempt to breakdown expressions
+
+	// Attempt to breakdown expressions
+	tree = breakdown(tree, options.x.toLowerCase() === "false");
 
 	// Until all our expressions have been resolved
 	var estimates, previous, should_force;
@@ -1191,7 +698,7 @@ function build(tree) {
 				previous[key].minimum == est.minimum &&
 				previous[key].maximum == est.maximum;
 		}, null);
-		previous = deepClone(estimates);
+		previous = helper.deepClone(estimates);
 
 		if (should_force) {
 			console.log("WARNING: Estimations went stale, forcing long constants");
@@ -1224,27 +731,27 @@ var parsed = options._.reduce(function (list, f) {
 	}, []),
 	result = build(parsed);
 
-console.log((data(result).length/2).toString(), "words assembled.")
-
 if (options.o) {
+	console.log((data(result).length/2).toString(), "words assembled.")
+
 	switch (options.f) {
-	case 's':
-	case 'source':
-	case 'data':
-		fs.writeFileSync(options.o, source(result));
-		break ;
-	case 'l':
-	case 'little':
-	case "littleendian":
-		fs.writeFileSync(options.o, data(result, true));
-		break ;
-	case 'b':
-	case 'big':
-	case "bigendian":
-	default:
-		fs.writeFileSync(options.o, data(result));
-		break ;
+		case 's':
+		case 'source':
+		case 'data':
+			fs.writeFileSync(options.o, helper.source(result));
+			break ;
+		case 'l':
+		case 'little':
+		case "littleendian":
+			fs.writeFileSync(options.o, data(result, true));
+			break ;
+		case 'b':
+		case 'big':
+		case "bigendian":
+		default:
+			fs.writeFileSync(options.o, data(result));
+			break ;
 	}
 } else {
-	console.log(source(result));
+	console.log(helper.source(result));
 }
