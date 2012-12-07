@@ -10,7 +10,8 @@ command_set
 command
 	= ":" _ i:identifier { return { line: line, column: column, type: "label", name: i.toUpperCase() }; }
 	/ i:identifier ":" _  { return { line: line, column: column, type: "label", name: i.toUpperCase() }; }
-	/ op:identifier args:expression_list { return { line: line, column: column, type: "operation", name: op.toUpperCase(), arguments: args }; }
+	/ op:word [ \t]+ args:expression_list { return { line: line, column: column, type: "operation", name: op.toUpperCase(), arguments: args }; }
+	/ op:identifier { return { line: line, column: column, type: "operation", name: op.toUpperCase(), arguments: [] }; }
 	/ directive
 
 directive
@@ -153,7 +154,8 @@ procedure
 
 // Collections
 identifier_list
-	= "(" _ a:(identifier "," _)* b:identifier ")" _ { return a.map(function(g) { return g[0]; }).concat(b); }
+	= "(" _ ")" _ { return []; }
+	/ "(" _ a:(identifier "," _)* b:identifier ")" _ { return a.map(function(g) { return g[0]; }).concat(b); }
 
 expression_list
 	= a:(expression "," _)* b:expression { return a.map(function(g) { return g[0]; }).concat(b); }
@@ -240,7 +242,10 @@ register
 	/ "pop"i { return "POP"; }
 
 identifier
-	= a:[_a-z]i b:[_a-z0-9]i* _ { return a + b.join(""); }
+	= word:word _ { return word; }
+
+word
+	= a:[_a-z]i b:[_a-z0-9]i* { return a + b.join(""); }
 
 // Whitespace and Comments
 _ 

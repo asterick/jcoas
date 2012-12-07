@@ -259,4 +259,3 @@ As a rule of thumb, the expression builder will use
 * Do shifter optimizations when possible (MUL A, 2 -> SHL A, 1)
 * Better assembler error output
 * Implement the relative offset (&) operator
-* Allow zero-argument macros
