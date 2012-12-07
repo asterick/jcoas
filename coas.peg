@@ -181,8 +181,9 @@ binary_op
 	/ op:"/"  { return { line: line, column: column, operation: op, priority: 6, inverse: "*", reorder: "partial" }; }
 	/ op:"*"  { return { line: line, column: column, operation: op, priority: 6, reorder: "full" }; }
 	/ op:"%"  { return { line: line, column: column, operation: op, priority: 6 }; }
-	/ op:"<<" { return { line: line, column: column, operation: op, priority: 3 }; }
+	/ op:">>>" { return { line: line, column: column, operation: op, priority: 3 }; }
 	/ op:">>" { return { line: line, column: column, operation: op, priority: 3 }; }
+	/ op:"<<" { return { line: line, column: column, operation: op, priority: 3 }; }
 	/ op:"||" { return { line: line, column: column, operation: op, priority: 2 }; }
 	/ op:"&&" { return { line: line, column: column, operation: op, priority: 1 }; }
 	/ op:"^"  { return { line: line, column: column, operation: op, priority: 4, reorder: "full" }; }
