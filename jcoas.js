@@ -952,9 +952,24 @@ function estimate(tree, estimates) {
 			if (!has_estimates) {
 				return "maybe";
 			}
-			// TODO: LOCATE INTEGER PART
-			// return range(field, [0]);
-			return "maybe";
+
+			if (field.value.type === "binary") {
+				if (field.value.left.type === "register") {
+					value = field.value.right;
+				} else if (field.value.right.type === "register") {
+					value = field.value.left;
+					if (field.operation === '-') {
+						console.log("asdf");
+						process.exit(-1);
+					}
+				} else {
+					value = field.value;
+				}
+			} else {
+				value = field.value;
+			}
+
+			return range(value, [0]);
 		case 'binary':
 		case 'unary':
 		case 'identifer':
