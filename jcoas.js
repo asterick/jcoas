@@ -885,27 +885,111 @@ function count(tree, type) {
 function estimate(tree, estimates) {
 	// These are our PC ranges
 	var minimum = 0,
-		maximum = 0;
+		maximum = 0,
+		has_estimates = estimates || false;
 
 	function align(number, bias) {
 		var offset = number % bias;
 		return number + (offset ? bias - offset : 0);
 	}
 
+	function references(equation) {
+		var names = [];
+		walk(equation, function (e) {
+			if (e.type === "identifier") {
+				names.push(e.name);
+			}
+		});
+		return names;
+	}
+
+	function range(equation, desired) {
+		var use = references(equation),
+			values = {},
+			short = false, long = false,
+			temp, name, i;
+
+		use.forEach(function (name) {
+			values[name] = { type: "number", value: estimates[name].minimum };
+		})
+
+		do {
+			// Calculate what our value should be now
+			i = flatten(define(deepClone(equation), values)).value & 0xFFFF;
+
+			if (desired.indexOf(i) >= 0) {
+				short = true;
+			} else {
+				long = true;
+			}
+
+			for (i = 0; i < use.length; i++) {
+				name = use[i];
+				if (++values[name].value <= estimates[name].maximum) { break; }
+				values[name].value = estimates[name.minimum];
+			}
+		} while (i < use.length && (!short || !long));
+
+		// Determine range
+		if (short) {
+			if (long) { return "maybe"; }
+			return "no";
+		}
+		return "yes;"
+	}
+
+	function guess(field) {
+		var value, values;
+		
+		switch (field.type) {
+		case 'register':
+			return "no";
+		case 'indirect':
+			if (field.type === "register") {
+				return "no";
+			}
+
+			if (!has_estimates) {
+				return "maybe";
+			}
+			// TODO: LOCATE INTEGER PART
+			// return range(field, [0]);
+			return "maybe";
+		case 'binary':
+		case 'unary':
+		case 'identifer':
+			if (!has_estimates) {
+				return "maybe";
+			}
+
+			return range(field, [0xFFFF].concat(_.range(0,30)));
+		case 'number':
+			value = field.value & 0xFFFF;
+			return (value > 30 || value < 0xFFFF) ? "yes" : "no";
+		default:
+			console.log("UNHANDLED ESTIMATION: " + field.type);
+			process.exit(-1);
+		}
+	}
+
 	function instruction(element) {
-		var instruction = INSTRUCTIONS[element.name];
+		var instruction = INSTRUCTIONS[element.name],
+			badEstimate = false;
 
-		// TODO: ESTIMATE SIZE OF THE OPERATION HERE
-		// METHOD: IF ALL ARGUMENTS HAVE AN ESTIMATE, GUESS SIZE
-		//			... OTHERWISE ALL OPTIONS EXIST
-		// NOTE: IF LOOP GOES STALE, WE SHOULD BREAK OUT AND JUST FORCE LONG LITERALS
-
-		minimum += 1;
-		maximum += instruction.length;
+		minimum++; maximum++;
+		element.arguments.forEach(function (field){
+			switch(guess(field)) {
+			case 'yes':   minimum++;
+			case 'maybe': maximum++;
+			}
+		});
+		
 		return element;
 	}
 
-
+	// We need somewhere to put our estimates
+	estimates || (estimates = {});
+	
 	walk(tree, function (element) {
 		switch (element.type) {
 		case 'org':
@@ -931,6 +1015,8 @@ function estimate(tree, estimates) {
 			break ;
 		}
 	});
+	
+	return estimates;
 }
 
 function assemble(tree) {
@@ -1042,7 +1128,6 @@ function data(tree) {
 }
 
 function build(tree) {
-	var estimates = {};
 	// Preprocess the AST tree
 	balance(tree);			// Order expression stage
 	tree = replace(tree);	// Replace macros and equates
@@ -1051,9 +1136,9 @@ function build(tree) {
 	tree = breakdown(tree);	// Attempt to breakdown expressions
 
 	// Until all our expressions have been resolved
-	var estimates = {};
+	var estimates;
 	do {
-		estimate(tree, estimates);
+		estimates = estimate(tree, estimates);
 
 		// Locate all our keys that have no-delta in minimums and maximum
 		var keys = _.reduce(estimates, function (set, v, k) {
@@ -1073,8 +1158,13 @@ function build(tree) {
 		// Finally, convert finished instructions to DATA blocks
 		tree = assemble(tree);
 
-		console.log(estimates);
-		process.exit(-1);
+		// NOTE: IF LOOP GOES STALE, WE SHOULD BREAK OUT AND JUST FORCE LONG LITERALS
+
+		// TODO: DELETE THIS SHIT
+		console.log("------");
+		console.log(source(tree)); // TEMP: Output generated source
+		var i; i = (i || 0) + 1;
+		if (i == 4) process.exit(-1);
 	} while (count(tree, 'operation') > 0);
 
 	console.log(source(tree)); // TEMP: Output generated source
