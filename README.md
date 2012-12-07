@@ -14,7 +14,7 @@ Features
 
 Basic Setup
 -----------
-1. Install Node.JS (http://nodejs.org)
+1. Install [Node.JS](http://nodejs.org)
 2. Fetch dependancies:  `npm install` in the root directory
 
 Running JCOAS
@@ -41,16 +41,46 @@ JCOAS attempts for follow notch style syntax with a few notable exceptions
 6. Comments may use C-style (// ... \n, /* ... */), or DASM style (; ... \n)
 
 **EXAMPLE**
-.org 0x1000 ; Code should be relative to 0x1000, does not include actual code
+    .org 0x1000 ; Code should be relative to 0x1000, does not include actual code
 
+    .macro BRA a
+        SET PC, &a
+    .end
+
+    reset:      MOV SP, 0   ; Reset our stack pointer
+                IAS &reset  ; Set interrupt service address to reset
+    halt:       BRA halt    ; Lets branch forever
+            
+    heapSpace: .bss 0x1000  ;Allocate 4k heap space
 
 Directives
 ----------
-TODO
+
+##Substituion
+These are macro / replacement style directives
+
+* .equ <name> <expression>
+* .macro <name> ... .end
+
+##Inclusion
+These operate on your filesystem to include additional filesfiles
+
+* .include
+* .incbytes
+* .incbig
+* .inglittle
+
+##Flow Control
+
+* .org
+* .bss
+* .align
+* .proc
 
 Expressions
 -----------
 **NOTE: Stack, PC and EX registers may NOT be referenced in complex expressions**
+**NOTE: & is currently not implemented, it is treated as a NOP**
 
 TODO
 
