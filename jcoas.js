@@ -645,7 +645,7 @@ function breakdown(tree) {
 		}
 
 		// Find a safe register to use for preservation
-		var instruction = INSTRUCTIONS[element.name];
+		var instruction = INSTRUCTIONS[element.name],
 			preserve_stack = instruction.volatile || !instruction.carry,
 			preserve_regs = [],
 			indexers = safe(element),
@@ -953,26 +953,27 @@ function estimate(tree, estimates) {
 				return "maybe";
 			}
 
-			if (field.value.type === "binary") {
-				if (field.value.left.type === "register") {
-					value = field.value.right;
-				} else if (field.value.right.type === "register") {
-					value = field.value.left;
-					if (field.operation === '-') {
-						console.log("asdf");
-						process.exit(-1);
-					}
-				} else {
-					value = field.value;
-				}
-			} else {
-				value = field.value;
-			}
+			value = field.value;
+			if (value.type === "binary") {
+				if (value.left.type === "register") {
+					value = value.right;
 
+					if (field.value.operation === '-') {
+						value = { 
+							type: "unary",
+							value: value,
+							operation: "-"
+						}
+					}
+				} else if (value.right.type === "register") {
+					value = value.left;
+				}
+			}
+						
 			return range(value, [0]);
 		case 'binary':
 		case 'unary':
-		case 'identifer':
+		case 'identifier':
 			if (!has_estimates) {
 				return "maybe";
 			}
@@ -1174,12 +1175,6 @@ function build(tree) {
 		tree = assemble(tree);
 
 		// NOTE: IF LOOP GOES STALE, WE SHOULD BREAK OUT AND JUST FORCE LONG LITERALS
-
-		// TODO: DELETE THIS SHIT
-		console.log("------");
-		console.log(source(tree)); // TEMP: Output generated source
-		var i; i = (i || 0) + 1;
-		if (i == 4) process.exit(-1);
 	} while (count(tree, 'operation') > 0);
 
 	console.log(source(tree)); // TEMP: Output generated source
