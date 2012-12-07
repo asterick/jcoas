@@ -482,74 +482,6 @@ function verify(tree) {
 	}
 }
 
-function identifiers(tree) {
-	var unresolved = 0;
-
-	walk(tree, function(element) {
-		if (element.identifier) { unresolved++; }
-	});
-
-	return unresolved;
-}
-
-function estimate(tree, estimates) {
-	// These are our PC ranges
-	var minimum = 0,
-		maximum = 0;
-
-	function align(number, bias) {
-		var offset = number % bias;
-		return number + (offset ? bias - offset : 0);
-	}
-
-	function instruction(element) {
-		// TODO: ESTIMATE SIZE OF THE OPERATION HERE
-		// TODO: ACTUAL ESTIMATION HERE
-		// TODO: CONVERT TO DATA IF LENGTH IS FIXED
-
-		minimum += element.arguments.length;
-		maximum += element.arguments.length;
-		return element;
-	}
-
-
-	walk(tree, function (element) {
-		switch (element.type) {
-		case 'org':
-			minimum = maximum = element.value.value;
-			break ;
-		case 'align':
-			minimum = align(minimum, element.value.value);
-			maximum = align(maximum, element.value.value);
-			break ;
-		case 'bss':
-			minimum += element.value.value;
-			maximum += element.value.value;
-			break ;
-		case 'data':
-			minimum += element.arguments.length;
-			maximum += element.arguments.length;
-			break ;
-		case 'label':
-			estimates[element.name] = {minimum: minimum, maximum: maximum};
-			break ;
-		case 'operation':
-			return instruction(element);
-			break ;
-		}
-	});
-}
-
-function data(tree) {
-	var output = [];
-	walk(tree, function (element) {
-		if(element.type !== 'data') { return ; }
-		
-		output = output.concat(_.pluck(element.arguments, 'value'));
-	});
-	return output;
-}
-
 function breakdown(tree) {
 	var INDEXABLE = ["A","B","C","X","Y","Z","I","J","SP"];
 
@@ -879,6 +811,74 @@ function breakdown(tree) {
 
 		return list.concat(output);
 	}, []);
+}
+
+function identifiers(tree) {
+	var unresolved = 0;
+
+	walk(tree, function(element) {
+		if (element.identifier) { unresolved++; }
+	});
+
+	return unresolved;
+}
+
+function estimate(tree, estimates) {
+	// These are our PC ranges
+	var minimum = 0,
+		maximum = 0;
+
+	function align(number, bias) {
+		var offset = number % bias;
+		return number + (offset ? bias - offset : 0);
+	}
+
+	function instruction(element) {
+		// TODO: ESTIMATE SIZE OF THE OPERATION HERE
+		// TODO: ACTUAL ESTIMATION HERE
+		// TODO: CONVERT TO DATA IF LENGTH IS FIXED
+
+		minimum += element.arguments.length;
+		maximum += element.arguments.length;
+		return element;
+	}
+
+
+	walk(tree, function (element) {
+		switch (element.type) {
+		case 'org':
+			minimum = maximum = element.value.value;
+			break ;
+		case 'align':
+			minimum = align(minimum, element.value.value);
+			maximum = align(maximum, element.value.value);
+			break ;
+		case 'bss':
+			minimum += element.value.value;
+			maximum += element.value.value;
+			break ;
+		case 'data':
+			minimum += element.arguments.length;
+			maximum += element.arguments.length;
+			break ;
+		case 'label':
+			estimates[element.name] = {minimum: minimum, maximum: maximum};
+			break ;
+		case 'operation':
+			return instruction(element);
+			break ;
+		}
+	});
+}
+
+function data(tree) {
+	var output = [];
+	walk(tree, function (element) {
+		if(element.type !== 'data') { return ; }
+		
+		output = output.concat(_.pluck(element.arguments, 'value'));
+	});
+	return output;
 }
 
 function compile(tree) {
