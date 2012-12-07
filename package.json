@@ -10,7 +10,6 @@
 	"dependencies": {
 		"pegjs": "0.7.0",
 		"underscore": "1.4.2",
-		"grunt": "0.3.17",
 		"optimist": "0.3.5"
 	},
 	"engines": {
