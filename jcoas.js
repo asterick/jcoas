@@ -319,8 +319,8 @@ function mark(tree) {
  */
 function define(tree, set) {
 	return walk(tree, function(element) {
-		if (element.type === 'identifier' ||
-			set[element.name]) {
+		// Replace identifiers
+		if (element.type === 'identifier' && set[element.name]) {
 			return deepClone(set[element.name]);
 		}
 	})
@@ -382,6 +382,9 @@ function replace(tree) {
 function flatten(tree) {
 	return walk(tree, function (element) {
 		switch (element.type) {
+		case 'operation':
+			// TODO: ACTUALLY FOLD UP INSTRUCTIONS THAT CAN BE FOLDED HERE
+			break ;
 		case 'string':
 			throw new Error("Strings are not allowed in " + element.type + "blocks");
 
@@ -875,15 +878,26 @@ function estimate(tree, estimates) {
 		return number + (offset ? bias - offset : 0);
 	}
 
+	function quickGuess(expression) {
+	}
+
 	function instruction(element) {
-		var instruction = INSTRUCTIONS[element.name];
-		
+		var instruction = INSTRUCTIONS[element.name],
+			guess = element.arguments.reduce(function (t, element) {
+				if (element.type !== 'register' &&
+					(element.type !== 'indirect' || element.value.type !== 'register')) 
+				{
+					t.maximum++;
+				}
+				return t;
+			}, {"minimum": 1, "maximum": 1});
+
 		// TODO: ESTIMATE SIZE OF THE OPERATION HERE
 		// TODO: ACTUAL ESTIMATION HERE
 		// TODO: CONVERT TO DATA IF LENGTH IS FIXED
 
 		//console.log(element);
-		process.exit(-1);
+		//process.exit(-1);
 
 		minimum += element.arguments.length;
 		maximum += element.arguments.length;
@@ -928,18 +942,40 @@ function data(tree) {
 	return output;
 }
 
+/**
+ * 0x00-0x07 | r0-r7
+ * 0x08-0x0f | [r0..r7]
+ * 0x10-0x17 | [r0..r7+#xx]
+ *      0x18 | PUSH / POP (depending, should throw an error if wrong order)
+ *      0x19 | [SP]
+ *      0x1a | [SP+#]
+ *      0x1b | SP
+ *      0x1c | PC
+ *      0x1d | EX
+ *      0x1e | [#xx]
+ *      0x1f | #xx
+ * 0x20-0x3f | -1..30
+ */
+
 function assemble(tree) {
+	return walk(tree, function (element) {
+		// Ignore non-operations and incompletes
+		if (element.type !== 'operation' || count(element, 'identifier') > 0) { 
+			return ;
+		}
+
+		console.log(element);
+	});
+}
+
+function build(tree) {
 	var estimates = {};
 	// Preprocess the AST tree
 	balance(tree);			// Order expression stage
 	tree = replace(tree);	// Replace macros and equates
-	flatten(tree);			// Flatten as much as possible before evaluation for speed
 	mark(tree);				// Mark expressions which will resolve to an integer at compile time
 	verify(tree);			// Run some sanity checks
 	tree = breakdown(tree);	// Attempt to breakdown expressions
-
-	console.log(source(tree)); // TEMP: Output generated source
-	console.log("----------");
 
 	// Until all our expressions have been resolved
 	var estimates = {};
@@ -960,6 +996,13 @@ function assemble(tree) {
 		// Replace and flatten the tree
 		define(tree, keys);
 		flatten(tree);
+
+		// Finally, convert finished instructions to DATA blocks
+		tree = assemble(tree);
+		
+		// TEMPORARY: STOP AFTER FIRST STAGE
+		//console.log(source(tree));
+		process.exit(-1);
 	} while (count(tree, 'operation') > 0);
 
 	console.log(source(tree)); // TEMP: Output generated source
@@ -971,4 +1014,4 @@ var parsed = options._.reduce(function (list, f) {
 		return list.concat(global.parser.parse(fs.readFileSync(f, "utf8")));
 	}, []);
 
-assemble(parsed);
+build(parsed);
