@@ -141,7 +141,7 @@ include
 	}
 
 macro 
-	= ".macro"i _ name:identifier params:expression_list commands:command_set ".end" _ { 
+	= ".macro"i _ name:identifier params:identifier_list commands:command_set ".end" _ { 
 		return { line: line, column: column, type: "macro", name: name.toUpperCase(), parameters: params, contents: commands };
 	}
 
@@ -153,10 +153,10 @@ procedure
 
 // Collections
 identifier_list
-	= a:(identifier "," _)* b:identifier { return a.map(function(g) { return g[0]; }).concat(b); }
+	= "(" _ a:(identifier "," _)* b:identifier ")" _ { return a.map(function(g) { return g[0]; }).concat(b); }
 
 expression_list
-	= "(" _ a:(expression "," _)* b:expression? ")" _ { if(b) { return a.map(function(g) { return g[0]; }).concat(b); } else { return []; } }
+	= a:(expression "," _)* b:expression { return a.map(function(g) { return g[0]; }).concat(b); }
 
 
 // Expressions

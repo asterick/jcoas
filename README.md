@@ -257,3 +257,5 @@ As a rule of thumb, the expression builder will use
 * Better assembler error output
 * Implement the relative offset (&) operator
 * Implement more output formats
+* Do not throw stale warning when no identifiers are used
+* Allow zero-argument macros
