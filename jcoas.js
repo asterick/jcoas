@@ -883,6 +883,8 @@ function count(tree, type) {
  * Estimate the values of labels
  */
 function estimate(tree, estimates) {
+	// TODO: ALLOW FOR FORCING FUNCTION
+
 	// These are our PC ranges
 	var minimum = 0,
 		maximum = 0,
@@ -1174,7 +1176,7 @@ function build(tree) {
 		// Finally, convert finished instructions to DATA blocks
 		tree = assemble(tree);
 
-		// NOTE: IF LOOP GOES STALE, WE SHOULD BREAK OUT AND JUST FORCE LONG LITERALS
+		// TODO: IF LOOP GOES STALE, WE SHOULD BREAK OUT AND JUST FORCE LONG LITERALS
 	} while (count(tree, 'operation') > 0);
 
 	console.log(source(tree)); // TEMP: Output generated source
