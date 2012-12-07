@@ -6,6 +6,8 @@ var pegjs = require("pegjs"),
 	optimist = require("optimist")
 		.usage("Usage: $0 [assembly files]")
 		.describe("o", "Output resource")
+		.describe("x", "Allow expressions")
+		.default("x", "true")
 		.alias("o", "output");
 
 var options = optimist.argv;
@@ -22,20 +24,24 @@ global.parser = pegjs.buildParser(
 var INSTRUCTIONS = {
 	// 2-OP characters
 	"SET" : { "code": 0x01, "length": 2 },
-	"ADD" : { "code": 0x02, "length": 2, carry: true },
-	"SUB" : { "code": 0x03, "length": 2, carry: true },
-	"MUL" : { "code": 0x04, "length": 2, carry: true },
-	"MLI" : { "code": 0x05, "length": 2, carry: true },
-	"DIV" : { "code": 0x06, "length": 2, carry: true },
-	"DVI" : { "code": 0x07, "length": 2, carry: true },
+	"MOV" : { "code": 0x01, "length": 2 },
+
+	"ADD" : { "code": 0x02, "length": 2, "carry": true },
+	"SUB" : { "code": 0x03, "length": 2, "carry": true },
+	"MUL" : { "code": 0x04, "length": 2, "carry": true },
+	"MLI" : { "code": 0x05, "length": 2, "carry": true },
+	"DIV" : { "code": 0x06, "length": 2, "carry": true },
+	"DVI" : { "code": 0x07, "length": 2, "carry": true },
 	"MOD" : { "code": 0x08, "length": 2 },
 	"MDI" : { "code": 0x09, "length": 2 },
 	"AND" : { "code": 0x0a, "length": 2 },
 	"BOR" : { "code": 0x0b, "length": 2 },
 	"XOR" : { "code": 0x0c, "length": 2 },
-	"SHR" : { "code": 0x0d, "length": 2, carry: true },
-	"ASR" : { "code": 0x0e, "length": 2, carry: true },
-	"SHL" : { "code": 0x0f, "length": 2, carry: true },
+
+	"SHR" : { "code": 0x0d, "length": 2, "carry": true },
+	"ASR" : { "code": 0x0e, "length": 2, "carry": true },
+	"SHL" : { "code": 0x0f, "length": 2, "carry": true },
+
 	"IFB" : { "code": 0x10, "length": 2 },
 	"IFC" : { "code": 0x11, "length": 2 },
 	"IFE" : { "code": 0x12, "length": 2 },
@@ -44,8 +50,10 @@ var INSTRUCTIONS = {
 	"IFA" : { "code": 0x15, "length": 2 },
 	"IFL" : { "code": 0x16, "length": 2 },
 	"IFU" : { "code": 0x17, "length": 2 },
-	"ADX" : { "code": 0x1a, "length": 2, carry: true, volatile: true },
-	"SBX" : { "code": 0x1b, "length": 2, carry: true, volatile: true },
+
+	"ADX" : { "code": 0x1a, "length": 2, "carry": true, "volatile": true },
+	"SBX" : { "code": 0x1b, "length": 2, "carry": true, "volatile": true },
+
 	"STI" : { "code": 0x1e, "length": 2 },
 	"STD" : { "code": 0x1f, "length": 2 },
 	// 1-OP characters
@@ -132,6 +140,35 @@ function walk(element, callback) {
 	}
 
 	return callback(element) || element;
+}
+
+function source(tree) {
+	if (!Array.isArray(tree)) { tree = [tree]; }
+
+	return walk(deepClone(tree), function (element) {
+		switch (element.type) {
+		case 'label':
+			return element.name + ":";
+		case 'register':
+			return element.name;
+		case 'number':
+			return element.value.toString(10);
+		case 'operation':
+			return "\t" + element.name + " " + element.arguments.join(", ");
+		case 'binary':
+			return "(" + element.left + element.operation + element.right + ")";
+		case 'indirect':
+			return "[" + element.value + "]";
+		case 'identifier':
+			return element.name;
+		case 'data':
+			return ".DATA " + element.arguments.join(", ");
+		case 'unary':
+			return "(" + element.operation + element.value + ")";
+		default:
+			throw new Error(element.type);
+		}
+	}).join("\n");
 }
 
 /**
@@ -353,10 +390,54 @@ function replace(tree) {
 function flatten(tree) {
 	return walk(tree, function (element) {
 		switch (element.type) {
+		case 'string':
+			throw new Error("Strings are not allowed in " + element.type + "blocks");
+
+		case 'paren':
+			return element.value;
+
 		case 'binary':
-			if (element.left.type !== 'number' ||
-				element.right.type !== 'number') {
-				break ;
+			if (element.operation === '#') {
+				// Convert to machine operation here
+				return flatten({
+					type: "binary",
+					operation: "|",
+					left: {
+						type: "binary",
+						operation: "&",
+						left: element.left,
+						right: { type: "number", value: 255 }
+					},
+					right: {
+						type: "binary",
+						operation: "<<",
+						left: element.right,
+						right: { type: "number", value: 8 }
+					}
+				});
+			}
+
+			if (element.left.type === 'number' &&
+				element.right.type === 'number') {
+
+				return {
+					type: 'number',
+					value: ({
+						"+": function(l,r) { return l+r; },
+						"-": function(l,r) { return l-r; },
+						"*": function(l,r) { return l*r; },
+						"/": function(l,r) { return Math.floor(l/r); },
+						"%": function(l,r) { return l%r; },
+						"<<": function(l,r) { return l<<r; },
+						">>>": function(l,r) { return l>>>r; },
+						">>": function(l,r) { return l>>r; },
+						"||": function(l,r) { return l||r; },
+						"&&": function(l,r) { return l&&r; },
+						"^": function(l,r) { return l^r; },
+						"|": function(l,r) { return l|r; },
+						"&": function(l,r) { return l&r; }
+					}[element.operation])(element.left.value, element.right.value)
+				};
 			}
 			
 			return {
@@ -428,12 +509,6 @@ function verify(tree) {
 			if (opcode.length !== element.arguments.length) {
 				throw new Error("Argument count mismatch");
 			}
-
-			element.arguments.slice(0,opcode.length - 1).forEach(function (element) {
-				if (element.type !== 'register' && element.type !== 'indirect') {
-					throw new Error("Left-hand argument must be an address or register");
-				}
-			});
 			break ;
 		case 'org':
 		case 'align':
@@ -457,26 +532,359 @@ function verify(tree) {
 	}
 }
 
-/**
- * Break apart complex expressions
- */
-
 function breakdown(tree) {
-	// TODO: BREAK DOWN COMPLEX INSTRUCTIONS
-	return tree;
+	var INDEXABLE = ["A","B","C","X","Y","Z","I","J","SP"];
+
+	// Determine which registers are available
+	function usingStack(tree) {
+		var stack = false;
+		walk(tree, function (element) {
+			if (element.type === "register" &&
+				(element.name === "POP" ||
+				element.name === "SP" ||
+				element.name === "PUSH")) {
+				stack = true;
+			}
+		});
+		return stack;
+	}
+
+	function safe (tree) {
+		var registers = ["SP"];
+		
+		walk(tree, function (element) {
+			if (element.type === 'register') {
+				registers.push(element.name);
+			}
+		})
+		
+		return _.difference(INDEXABLE, registers);
+	}
+
+	function indexed (tree, safe) {
+		var indirect = false;
+		walk(tree, function (element) {
+			switch (element.type) {
+			case "register":
+				if (safe) { return ; }
+			
+				if (element.name === "EX" ||
+					element.name === "POP" ||
+					element.name === "SP" ||
+					element.name === "PC" ||
+					element.name === "PUSH") {
+					throw new Error("Cannot use EX, PC or Stack in complex expressions.");
+				}
+				break ;
+			case "indirect":
+				indirect = true;
+			}
+		});
+		return indirect;
+	}
+	
+	// Determine if an expression needs further breakdown
+	function base (expression) {
+		var value;
+		
+		switch (expression.type) {
+		case 'register':	// r0-r7, ex, pc, sp, push, pop
+			// Registers are always a valid source / target
+			return true;
+		case 'indirect':
+			value = expression.value;
+			// We can directly index whitelisted registers and 
+			if (value.integer ||
+				(value.type === "register" &&
+				INDEXABLE.indexOf(value.name) >= 0)) {
+				return true ;
+			}
+
+			// Is it an indexed register?
+			if (value.type === 'binary' && (
+				value.operation === "+" ||
+				value.operation === "-"
+				)) {
+				// 
+				if (value.right.integer &&
+					value.left.type === "register" &&
+					INDEXABLE.indexOf(value.left.name) >= 0) {
+					return true;
+				} else if (value.operation === "+" && 
+					value.left.integer &&
+					value.right.type === "register" &&
+					INDEXABLE.indexOf(value.right.name) >= 0) {
+					return true;
+				}
+			}
+			return false;
+		default:
+			// Anything that resolves to an integer is valid
+			return expression.integer;
+		}
+	}
+
+	return tree.reduce(function (list, element) {
+		// We do not transform directives / labels
+		if (element.type != "operation") {
+			return list.concat(element);
+		}
+
+		// This is a non-complex instruction, does not need a breakdown stage
+		if (_.every(element.arguments, base)) {
+			return list.concat(element);
+		} else if (options.x.toLowerCase() === "false") {
+			throw new Error("Complex expression in: " + source(element));
+		}
+
+		// Check to see if this uses indexed-complex and stack together
+		var stackBased = false,
+			indexedComplex = false;
+
+		element.arguments.forEach(function (e) {
+			stackBased = stackBased || usingStack(e);
+
+			indexedComplex = indexedComplex ||
+				(indexed(e, true) && !base(e));
+		});
+
+		if (stackBased && indexedComplex) {
+			throw new Error("Cannot combine Stack with Indexed complex expressions");
+		}
+
+		// Find a safe register to use for preservation
+		var instruction = INSTRUCTIONS[element.name];
+			preserve_stack = instruction.volatile || !instruction.carry,
+			preserve_regs = [],
+			indexers = safe(element),
+			output = [],
+			depth = 0;
+
+		// Preserve our stack when nessessary
+		if (preserve_stack) {
+			output.push({
+				type: "operation",
+				name: "MOV",
+				arguments: [
+					{type:"register", name:"PUSH"},
+					{type:"register", name:"EX"}
+				]
+			});
+		}
+
+		element.arguments = element.arguments.map(function (exp, index) {
+			var last = index == (element.arguments.length - 1),
+				indirect,
+				indexer;
+
+			function reduce(tree) {
+				var BINARY_OPS = {
+					"+": "ADD",
+					"-": "SUB",
+					"*": "MLI",
+					"/": "DVI",
+					"%": "MDI",
+					"<<": "SHL",
+					">>>": "ASR",
+					">>": "SHR",
+					"^": "XOR",
+					"|": "BOR",
+					"&": "AND"
+				}, UNARY_OPS = {
+					"-": "MLI",
+					"~": "XOR"
+				}, temp;
+
+				
+				// Leaf node
+				if (base(tree)) {
+					output.push({
+						type: "operation",
+						name: "MOV",
+						arguments: [
+							{type:"register", name: "PUSH"},
+							tree
+						]
+					});
+					return ;
+				}
+
+				switch (tree.type) {
+				case 'indirect':
+					reduce(tree.value);
+					output.push({
+						type: "operation",
+						name: "MOV",
+						arguments: [
+							{type:"register", name: indexer},
+							{type:"register", name: "POP"}
+						]
+					});
+					output.push({
+						type: "operation",
+						name: "MOV",
+						arguments: [
+							{type:"register", name: "PUSH"},
+							{type:"indirect", value: {type:"register", name: indexer}}
+						]
+					});
+					break ;
+				case 'unary':
+					if(!UNARY_OPS[tree.operation]) {
+						throw new Error("Cannot handle unary operator: " + tree.operation);
+					}
+
+					reduce(tree.value);
+					output.push({
+						type: "operation",
+						name: UNARY_OPS[tree.operation],
+						arguments: [
+							{type:"indirect", value: {type:"register", name: "SP"}},
+							{type:"number", value: -1}
+						]
+					});
+					break ;
+				case 'binary':
+					if (!BINARY_OPS[tree.operation]) {
+						throw new Error("Cannot run-time execute operation " + tree.operation);
+					}
+
+					reduce(tree.left);
+					
+					if (base(tree.right)) {
+						temp = tree.right;
+					} else {
+						reduce(tree.right);
+						temp = {type:"register", name: "POP"};
+					}
+
+					output.push({
+						type: "operation",
+						name: BINARY_OPS[tree.operation],
+						arguments: [
+							{type:"indirect", value: {type:"register", name: "SP"}},
+							temp
+						]
+					});
+					break ;
+				default:
+					console.log(exp);
+					process.exit(-1);
+				}
+			}
+
+			if (!last) {
+				if (exp.type !== 'register' && exp.type !== 'indirect') {
+					throw new Error("Left-hand argument must be an address or register");
+				}
+			}
+
+			if (base(exp)) { return exp; }
+
+			indirect = indexed(exp);
+			indexer = indexed && indexers.pop();
+
+			if (indirect) {
+				if (!indexer) {
+					throw new Error("Not enough registers for indexers");
+				}
+				preserve_regs.push(indexer);
+			}
+
+			depth++;
+
+			if (last) {
+				reduce (exp);
+				return {
+					type: "register",
+					name: "POP"
+				}
+			} else {
+				reduce (exp.value);
+				
+				output.push({
+					type: "operation",
+					name: "MOV",
+					arguments: [
+						{type:"register", name: indexer},
+						{type:"register", name: "POP"}
+					]
+				});
+				
+				depth--;
+				exp.value = {type:"register", name: indexer};
+				return exp;
+			}
+		});
+		
+		// Restore the stack
+		if (preserve_stack) {
+			if (depth) {
+				output.push({
+					type: "operation",
+					name: "MOV",
+					arguments: [
+						{type:"register", name:"EX"},
+						{type:"indirect", value: {
+							type: "binary",
+							operation: "+",
+							left: {type:"register", name:"SP"},
+							right: {type:"number", value: depth}
+						}}
+					]
+				}, element, {
+					type: "operation",
+					name: "ADD",
+					arguments: [
+						{type:"register", name:"SP"},
+						{type:"number", value: depth}
+					]
+				});
+			} else {
+				output.push({
+					type: "operation",
+					name: "MOV",
+					arguments: [
+						{type:"register", name:"EX"},
+						{type:"indirect", value: {type:"register", name:"SP"}}
+						]
+				}, element);
+			}
+		} else {
+			output.push(element);
+		}
+
+		preserve_regs.forEach(function (r) {
+			output.unshift({
+				type: "operation",
+				name: "MOV",
+				arguments: [
+					{type:"register", name: "PUSH"},
+					{type:"register", name: r}
+				]
+			});
+			output.push({
+				type: "operation",
+				name: "MOV",
+				arguments: [
+					{type:"register", name: r},
+					{type:"register", name: "POP"}
+				]
+			});
+		});
+
+		return list.concat(output);
+	}, []);
 }
 
-/**
- * Count identifiers
- */
-function identifiers(tree) {
-	var unresolved = 0;
+function count(tree, type) {
+	var total = 0;
 
-	walk(tree, function (element) {
-		if (element.identifier) { unresolved++; }
+	walk(tree, function(element) {
+		if (element.type === type) { total++; }
 	});
 
-	return unresolved;
+	return total;
 }
 
 /**
@@ -498,6 +906,9 @@ function estimate(tree, estimates) {
 		// TODO: ESTIMATE SIZE OF THE OPERATION HERE
 		// TODO: ACTUAL ESTIMATION HERE
 		// TODO: CONVERT TO DATA IF LENGTH IS FIXED
+
+		//console.log(element);
+		process.exit(-1);
 
 		minimum += element.arguments.length;
 		maximum += element.arguments.length;
@@ -544,16 +955,20 @@ function data(tree) {
 
 function assemble(tree) {
 	var estimates = {};
+	// Preprocess the AST tree
 	balance(tree);			// Order expression stage
 	tree = replace(tree);	// Replace macros and equates
+	flatten(tree);			// Flatten as much as possible before evaluation for speed
 	mark(tree);				// Mark expressions which will resolve to an integer at compile time
 	verify(tree);			// Run some sanity checks
+	tree = breakdown(tree);	// Attempt to breakdown expressions
 
-	tree = breakdown(tree);
-
-	//console.log(JSON.stringify(tree,null,4));
+	console.log(JSON.stringify(tree,null,4));
+	console.log(source(tree)); // TEMP: Output generated source
+	console.log("----------");
 
 	// Until all our expressions have been resolved
+	var estimates = {};
 	do {
 		estimate(tree, estimates);
 
@@ -571,10 +986,9 @@ function assemble(tree) {
 		// Replace and flatten the tree
 		define(tree, keys);
 		flatten(tree);
-	} while (identifiers(tree) > 0);
+	} while (count(tree, 'operation') > 0);
 
-	//console.log(JSON.stringify(tree,null,4));
-	process.exit(-1);
+	console.log(source(tree)); // TEMP: Output generated source
 
 	return data(tree);
 }
