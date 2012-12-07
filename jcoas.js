@@ -759,6 +759,7 @@ function breakdown(tree) {
 					]
 				});
 				
+				depth--;
 				exp.value = {type:"register", name: indexer};
 				return exp;
 			}
@@ -778,14 +779,18 @@ function breakdown(tree) {
 						right: {type:"number", value: depth}
 					}}
 				]
-			}, element, {
-				type: "operation",
-				name: "ADD",
-				arguments: [
-					{type:"register", name:"SP"},
-					{type:"number", value: 1}
-				]
-			});
+			}, element);
+			
+			if (depth) {
+				output.push({
+					type: "operation",
+					name: "ADD",
+					arguments: [
+						{type:"register", name:"SP"},
+						{type:"number", value: depth}
+					]
+				});
+			}
 		} else {
 			output.push(element);
 		}
