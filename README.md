@@ -154,87 +154,87 @@ As a rule of thumb, the expression builder will use
     <tr>
         <th>+</th>
         <td>5</td>
-        </td>Add</td>
+        <td>Add</td>
     </tr>
     <tr>
         <th>-</th>
         <td>5</td>
-        </td>Subtract</td>
+        <td>Subtract</td>
     </tr>
     <tr>
         <th>/</th>
         <td>6</td>
-        </td>Divide</td>
+        <td>Divide</td>
     </tr>
     <tr>
         <th>*</th>
         <td>6</td>
-        </td>Multiply</td>
+        <td>Multiply</td>
     </tr>
     <tr>
         <th>%</th>
         <td>6</td>
-        </td>Modulo</td>
+        <td>Modulo</td>
     </tr>
     <tr>
         <th>&gt;&gt;&gt;</th>
         <td>3</td>
-        </td>Arithmatic bit-shift left</td>
+        <td>Arithmatic bit-shift left</td>
     </tr>
     <tr>
         <th>&gt;&gt;</th>
         <td>3</td>
-        </td>Bit-shift left</td>
+        <td>Bit-shift left</td>
     </tr>
     <tr>
         <th>&lt;&lt;</th>
         <td>3</td>
-        </td>Bit-shift right</td>
+        <td>Bit-shift right</td>
     </tr>
     <tr>
         <th>||</th>
         <td>2</td>
-        </td>Logical or</td>
+        <td>Logical or</td>
     </tr>
     <tr>
         <th>&amp;&amp;</th>
         <td>1</td>
-        </td>Logical and</td>
+        <td>Logical and</td>
     </tr>
     <tr>
         <th>^</th>
         <td>4</td>
-        </td>Exclusive-OR</td>
+        <td>Exclusive-OR</td>
     </tr>
     <tr>
         <th>|</th>
         <td>4</td>
-        </td>Bitwise OR</td>
+        <td>Bitwise OR</td>
     </tr>
     <tr>
         <th>&amp;</th>
         <td>4</td>
-        </td>Bitwise AND</td>
+        <td>Bitwise AND</td>
     </tr>
     <tr>
         <th>#</th>
         <td>4</td>
-        </td>Pack two bytes into a word (little-endian)</td>
+        <td>Pack two bytes into a word (little-endian)</td>
     </tr>
     <tr>
         <th colspan="3">Unary Operations</th>
     </tr>
     <tr>
         <th colspan=2>-</th>
-        </td>Bitwise OR</td>
+        <td>Bitwise OR</td>
     </tr>
     <tr>
         <th colspan=2>~</th>
-        </td>Complement</td>
+        <td>Complement</td>
     </tr>
     <tr>
         <th colspan=2>&amp;</th>
-        </td>Address-relative operation (relocatable) **NOT CURRENTLY IMPLEMENTED, TREATED AS NOP**</td>
+        <td>Address-relative operation (relocatable) **NOT CURRENTLY IMPLEMENTED, TREATED AS NOP**</td>
     </tr>
 </table>
 
