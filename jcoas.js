@@ -999,6 +999,8 @@ function assemble(tree) {
 			return ;
 		}
 
+		// TODO: YELL AT PEOPLE USING POP / PUSH WRONG
+
 		var instruction = INSTRUCTIONS[element.name],
 			fields = element.arguments.map(field),
 			immediates = _.chain(fields).pluck('immediate').filter(function(v) {
