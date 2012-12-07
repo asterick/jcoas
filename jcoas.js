@@ -942,29 +942,101 @@ function data(tree) {
 	return output;
 }
 
-/**
- * 0x00-0x07 | r0-r7
- * 0x08-0x0f | [r0..r7]
- * 0x10-0x17 | [r0..r7+#xx]
- *      0x18 | PUSH / POP (depending, should throw an error if wrong order)
- *      0x19 | [SP]
- *      0x1a | [SP+#]
- *      0x1b | SP
- *      0x1c | PC
- *      0x1d | EX
- *      0x1e | [#xx]
- *      0x1f | #xx
- * 0x20-0x3f | -1..30
- */
-
 function assemble(tree) {
+	var REGISTERS = {
+		"A": 0, "B": 1, "C": 3, "X": 4,
+		"Y": 4, "Z": 5, "I": 6, "J": 7,
+		"SP": 0x1b, "PC": 0x1c, "EX": 0x1d,
+		"PUSH": 0x18, "POP": 0x18
+	};
+
+	function field(expression) {
+		var value, reg, op;
+		
+		switch (expression.type) {
+		case "number":
+			value = expression.value & 0xFFFF;
+
+			if (value <= 30 || value === 0xFFFF) {
+				return { field: ((value - 1) & 0x1F) + 0x20 };
+			} 
+
+			return { field: 0x1f, immediate: value };
+		case "register":
+			return { field: REGISTERS[expression.name] };
+		case "indirect":
+			op = expression.value;
+
+			if (op.type === "register") {
+				reg = op.name;
+				value = 0;
+			} else if (op.type === 'binary') {
+				if (op.left.type === "register") {
+					reg = op.left.name;
+					value = op.right.value;
+				} else {
+					reg = op.right.name;
+					value = op.left.value;
+				}
+			} else if (op.type === "number") {
+				return { field: 0x1e, immediate: op.value };
+			} else {
+				throw new Error("I don't know how this happened.  Sad face.");
+			}
+
+			if (reg === 'PC' || reg === 'EX') {
+				throw new Error("I don't know how this happened.  Sad face.");
+			}
+
+			if (op.operation === '-') { value = -value; }
+
+			if (value) {
+				return { 
+					field: (reg === 'SP') ? 0x1a : (0x10 + REGISTERS[reg]),
+					immediate: value 
+				};
+			} else {
+				return { 
+					field: (reg === 'SP') ? 0x19 : (0x08 + REGISTERS[reg])
+				};
+			}
+		default:
+			throw new Error("I don't know how this happened.  Sad face.");
+		}
+	}
+
 	return walk(tree, function (element) {
 		// Ignore non-operations and incompletes
 		if (element.type !== 'operation' || count(element, 'identifier') > 0) { 
 			return ;
 		}
 
-		console.log(element);
+		var instruction = INSTRUCTIONS[element.name],
+			fields = element.arguments.map(field),
+			immediates = _.chain(fields).pluck('immediate').filter(function(v) {
+				return typeof v === "number";
+			}).map(function (v) {
+				return { type: 'number', value: v };
+			}).reverse().value(),
+			a, b, op;
+
+		if (instruction.length === 1) {
+			op = 0x1F;
+			a = instruction.code;
+			b = fields[0].field;
+		} else {
+			op = instruction.code;
+			a = fields[1].field;
+			b = fields[0].field;
+		}
+
+		// Convert instruction to a data-block
+		return {
+			type: 'data',
+			arguments: [
+				{ type: "number", value: op | (a << 5) | (b << 10)}
+			].concat(immediates)
+		};
 	});
 }
 
@@ -1001,7 +1073,7 @@ function build(tree) {
 		tree = assemble(tree);
 		
 		// TEMPORARY: STOP AFTER FIRST STAGE
-		//console.log(source(tree));
+		console.log(source(tree));
 		process.exit(-1);
 	} while (count(tree, 'operation') > 0);
 
