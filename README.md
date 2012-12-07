@@ -38,17 +38,26 @@ JCOAS attempts for follow notch style syntax with a few notable exceptions
 8. labels prefixed with an underscore (_) are scoped in .proc blocks
 
 ###EXAMPLE
-    .org 0x1000 ; Code should be relative to 0x1000, does not include actual code
-
-    .macro BRA a
-        SET PC, &a
+    .macro PUSH a
+        SET PUSH, a
     .end
 
-    reset:      MOV SP, 0   ; Reset our stack pointer
-                IAS &reset  ; Set interrupt service address to reset
-    halt:       BRA halt    ; Lets branch forever
-            
-    heapSpace: .bss 0x1000  ;Allocate 4k heap space
+    isr:        RFI 0           ; No routines
+
+    reset:      MOV SP, 0       ; Reset stack, heap
+                MOV A, &heapSpace
+                IAS &reset
+
+    .proc
+                MOV B, 0        ; Zero out every 10 bytes of our heap-space
+    _loop:      MOV [B*10+A], 0
+                ADD B, 1
+                IFG B, 9
+                    SET B, 0
+                SET PC, &_loop
+    .end
+
+    heapSpace:  .bss 0x1000     ;Allocate 4k heap space
 
 ##Directives
 Directives provide assemble time functionality to the assembler.  These are
