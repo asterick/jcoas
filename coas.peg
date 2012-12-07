@@ -192,8 +192,7 @@ binary_op
 	/ op:"#"  { return { line: line, column: column, operation: op, priority: 4 }; }
 
 unary_op
-	= "+"
-	/ "-"
+	= "-"
 	/ "~"
 	/ "&"
 

@@ -21,7 +21,7 @@ Currently JCOAS only provides you with a few options:
 2. Disabling / Enabling complex expression breakdown
 3. Specifying a Big-Endian binary (NOTCH order)
 
-Example:  `node jcoas.js -x main.asm secondary.asm`
+Example:  `node jcoas.js -o binary.bin -x main.asm secondary.asm`
 
 ##Assembler Syntax
 **NOTE: JCOAS is neither case, nor whitespace sensitive**
@@ -51,81 +51,196 @@ JCOAS attempts for follow notch style syntax with a few notable exceptions
     heapSpace: .bss 0x1000  ;Allocate 4k heap space
 
 ##Directives
+Directives provide assemble time functionality to the assembler.  These are
+operations that either build down into a different set of data, insert new data
+or alter the flow control of the application.
 
 <table>
-   <tr>
-      <th colspan=3>Substituion</th>
-   </tr> 
-   <tr>
-      <th>.equ</tg>
-      <td>&lt;name&gt; &lt;value&gt;</td>
-      <td>Create constant replacement</td>
-   </tr>
-   <tr>
-      <th>.macro</tg>
-      <td>&lt;name&gt; &lt;argument&gt; [, &lt;argument&gt; ...] ... <b>.end</b></td>
-      <td>Create a block replacement directive (macro)</td>
-   </tr>
+    <tr>
+        <th colspan=3>Substituion</th>
+    </tr> 
+    <tr>
+        <th>.equ</tg>
+        <td>&lt;name&gt; &lt;value&gt;</td>
+        <td>Create constant replacement</td>
+    </tr>
+    <tr>
+        <th>.macro</tg>
+        <td>&lt;name&gt; &lt;argument&gt; [, &lt;argument&gt; ...] ... <b>.end</b></td>
+        <td>Create a block replacement directive (macro)</td>
+    </tr>
 
-   <tr>
-      <th colspan=3>Inclusion</th>
-   </tr> 
-   <tr>
-      <th>.include</tg>
-      <td>&lt;filename&gt;</td>
-      <td>Insert file as raw assembly</td>
-   </tr>
-   <tr>
-      <th>.incbig</tg>
-      <td>&lt;filename&gt;</td>
-      <td>Insert file as .DAT block, file encoded as big-endian words</td>
-   </tr>
-   <tr>
-      <th>.inclittle</tg>
-      <td>&lt;filename&gt;</td>
-      <td>Insert file as .DAT block, file encoded as little-endian words</td>
-   </tr>
-   <tr>
-      <th>.incbytes</tg>
-      <td>&lt;filename&gt;</td>
-      <td>Insert file as .DAT block, file encoded as bytes</td>
-   </tr>
+    <tr>
+        <th colspan=3>Inclusion</th>
+    </tr> 
+    <tr>
+        <th>.include</tg>
+        <td>&lt;filename&gt;</td>
+        <td>Insert file as raw assembly</td>
+    </tr>
+    <tr>
+        <th>.incbig</tg>
+        <td>&lt;filename&gt;</td>
+        <td>Insert file as .DAT block, file encoded as big-endian words</td>
+    </tr>
+    <tr>
+        <th>.inclittle</tg>
+        <td>&lt;filename&gt;</td>
+        <td>Insert file as .DAT block, file encoded as little-endian words</td>
+    </tr>
+    <tr>
+        <th>.incbytes</tg>
+        <td>&lt;filename&gt;</td>
+        <td>Insert file as .DAT block, file encoded as bytes</td>
+    </tr>
 
-   <tr>
-      <th colspan=3>Flow control</th>
-   </tr> 
-   <tr>
-      <th>.org</tg>
-      <td>&lt;location&gt;</td>
-      <td>Set baseline for code positions</td>
-   </tr>
-   <tr>
-      <th>.align</tg>
-      <td>&lt;bias&gt;</td>
-      <td>Align next value to an N*size word boundary</td>
-   </tr>
-   <tr>
-      <th>.bss</tg>
-      <td>&lt;size&gt;</td>
-      <td>Allocate a zero fill block</td>
-   </tr>
-   <tr>
-      <th>.data</tg>
-      <td>data [, data ...]</td>
-      <td>Insert raw word data</td>
-   </tr>
-   <tr>
-      <th>.proc</tg>
-      <td>... <b>.end</b></td>
-      <td>Create a proceedure block scope for labels, EQUs and MACROs</td>
-   </tr>
+    <tr>
+        <th colspan=3>Flow control</th>
+    </tr> 
+    <tr>
+        <th>.org</tg>
+        <td>&lt;location&gt;</td>
+        <td>Set baseline for code positions</td>
+    </tr>
+    <tr>
+        <th>.align</tg>
+        <td>&lt;bias&gt;</td>
+        <td>Align next value to an N*size word boundary</td>
+    </tr>
+    <tr>
+        <th>.bss</tg>
+        <td>&lt;size&gt;</td>
+        <td>Allocate a zero fill block</td>
+    </tr>
+    <tr>
+        <th>.data</tg>
+        <td>data [, data ...]</td>
+        <td>Insert raw word data</td>
+    </tr>
+    <tr>
+        <th>.proc</tg>
+        <td>... <b>.end</b></td>
+        <td>Create a proceedure block scope for labels, EQUs and MACROs</td>
+    </tr>
 </table>
 
 ##Expressions
-**NOTE: Stack, PC and EX registers may NOT be referenced in complex expressions**
-**NOTE: & is currently not implemented, it is treated as a NOP**
+At the heart of the assembler is a strong, flexible expression system.  In addition
+to being able to resolve assemble-time expressions, the assembler can also break down
+complex, run time expressions into zero-impact instructions.  This feature should be
+used sparingly, as it produces code that is entirely stack based and potentially very
+large in size, very quickly.  It does not make any attempts to use registers with the
+exception of indirect addressing modes.
 
-TODO
+in addition to this restriction, there are a few caveats to complex expressions:
+
+1. You maynot use Stack, PC or EX inside of these expressions, and their values are meaningless
+2. If you use indirect addressing and complex expressions, you must leave one register for each argument using indirect addressing
+
+As a rule of thumb, the expression builder will use
+* One insructions per non-compile time operation
+* Two instructions per indirect address
+* Two instructions per register preserve/restore
+
+<table>
+    <tr>
+        <th colspan="3">Binary Operations</th>
+    </tr>
+    <tr>
+        <th>Operation</th>
+        <th>Priority</th>
+        <th>Description</th>
+    </tr>
+    <tr>
+        <th>+</th>
+        <td>5</td>
+        </td>Add</td>
+    </tr>
+    <tr>
+        <th>-</th>
+        <td>5</td>
+        </td>Subtract</td>
+    </tr>
+    <tr>
+        <th>/</th>
+        <td>6</td>
+        </td>Divide</td>
+    </tr>
+    <tr>
+        <th>*</th>
+        <td>6</td>
+        </td>Multiply</td>
+    </tr>
+    <tr>
+        <th>%</th>
+        <td>6</td>
+        </td>Modulo</td>
+    </tr>
+    <tr>
+        <th>&gt;&gt;&gt;</th>
+        <td>3</td>
+        </td>Arithmatic bit-shift left</td>
+    </tr>
+    <tr>
+        <th>&gt;&gt;</th>
+        <td>3</td>
+        </td>Bit-shift left</td>
+    </tr>
+    <tr>
+        <th>&lt;&lt;</th>
+        <td>3</td>
+        </td>Bit-shift right</td>
+    </tr>
+    <tr>
+        <th>||</th>
+        <td>2</td>
+        </td>Logical or</td>
+    </tr>
+    <tr>
+        <th>&amp;&amp;</th>
+        <td>1</td>
+        </td>Logical and</td>
+    </tr>
+    <tr>
+        <th>^</th>
+        <td>4</td>
+        </td>Exclusive-OR</td>
+    </tr>
+    <tr>
+        <th>|</th>
+        <td>4</td>
+        </td>Bitwise OR</td>
+    </tr>
+    <tr>
+        <th>&amp;</th>
+        <td>4</td>
+        </td>Bitwise AND</td>
+    </tr>
+    <tr>
+        <th>#</th>
+        <td>4</td>
+        </td>Pack two bytes into a word (little-endian)</td>
+    </tr>
+    <tr>
+        <th colspan="3">Unary Operations</th>
+    </tr>
+    <tr>
+        <th colspan=2>-</th>
+        </td>Bitwise OR</td>
+    </tr>
+    <tr>
+        <th colspan=2>~</th>
+        </td>Complement</td>
+    </tr>
+    <tr>
+        <th colspan=2>&amp;</th>
+        </td>Address-relative operation (relocatable) **NOT CURRENTLY IMPLEMENTED, TREATED AS NOP**</td>
+    </tr>
+</table>
+
+###Example
+    MOV [C*9], [B*100+A]
+
 
 ##Things Left Todo
 * Capture PEG parser errors and produce more friendly warnings
