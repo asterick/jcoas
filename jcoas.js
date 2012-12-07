@@ -767,22 +767,21 @@ function breakdown(tree) {
 		
 		// Restore the stack
 		if (preserve_stack) {
-			output.push({
-				type: "operation",
-				name: "MOV",
-				arguments: [
-					{type:"register", name:"EX"},
-					{type:"indirect", value: {
-						type: "binary",
-						operation: "+",
-						left: {type:"register", name:"SP"},
-						right: {type:"number", value: depth}
-					}}
-				]
-			}, element);
 			
 			if (depth) {
 				output.push({
+					type: "operation",
+					name: "MOV",
+					arguments: [
+						{type:"register", name:"EX"},
+						{type:"indirect", value: {
+							type: "binary",
+							operation: "+",
+							left: {type:"register", name:"SP"},
+							right: {type:"number", value: depth}
+						}}
+					]
+				}, element, {
 					type: "operation",
 					name: "ADD",
 					arguments: [
@@ -790,6 +789,15 @@ function breakdown(tree) {
 						{type:"number", value: depth}
 					]
 				});
+			} else {
+				output.push({
+					type: "operation",
+					name: "MOV",
+					arguments: [
+						{type:"register", name:"EX"},
+						{type:"indirect", value: {type:"register", name:"SP"}}
+						]
+				}, element);
 			}
 		} else {
 			output.push(element);
@@ -887,7 +895,7 @@ function data(tree) {
 }
 
 function compile(tree) {
-	var estimates = {};
+	// Preprocess the AST tree
 	balance(tree);			// Order expression stage
 	tree = replace(tree);	// Replace macros and equates
 	flatten(tree);			// Flatten as much as possible before evaluation for speed
@@ -895,7 +903,10 @@ function compile(tree) {
 	verify(tree);			// Run some sanity checks
 	tree = breakdown(tree);	// Attempt to breakdown expressions
 
+	console.log(source(tree)); // TEMP: Output generated source
+
 	// Until all our expressions have been resolved
+	var estimates = {};
 	while (identifiers(tree) > 0) {
 		estimate(tree, estimates);
 
@@ -915,7 +926,7 @@ function compile(tree) {
 		flatten(tree);
 	}
 
-	console.log(source(tree));
+	console.log(source(tree)); // TEMP: Output generated source
 
 	return data(tree);
 }
