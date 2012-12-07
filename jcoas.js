@@ -162,7 +162,7 @@ function source(tree) {
 		case 'identifier':
 			return element.name;
 		case 'data':
-			return ".DATA " + element.arguments.join(", ");
+			return "\t.DATA " + element.arguments.join(", ");
 		case 'unary':
 			return "(" + element.operation + element.value + ")";
 		default:
@@ -299,23 +299,15 @@ function mark(tree) {
 		switch(element.type) {
 		case 'indirect':
 			element.integer = false;
-			element.volatile = element.value.volatile;
-			break ;
-		case 'register':
-			element.integer = false;
-			element.volatile = (element.name === 'EX');
 			break ;
 		case 'identifier':
 		case 'number':
 			element.integer = true;
-			element.volatile = false;
 			break ;
 		case 'binary':
-			element.volatile = element.right.volatile || element.right.volatile;
 			element.integer = element.right.integer && element.left.integer;
 			break ;
 		case 'unary':
-			element.volatile = element.value.volatile;
 			element.integer = element.operation !== '&' && element.value.integer;
 			break ;
 		}
@@ -439,25 +431,8 @@ function flatten(tree) {
 					}[element.operation])(element.left.value, element.right.value)
 				};
 			}
-			
-			return {
-				type: 'number',
-				value: ({
-					"+": function(l,r) { return l+r; },
-					"-": function(l,r) { return l-r; },
-					"*": function(l,r) { return l*r; },
-					"/": function(l,r) { return l/r; },
-					"%": function(l,r) { return l%r; },
-					"<<": function(l,r) { return l<<r; },
-					">>": function(l,r) { return l>>r; },
-					"||": function(l,r) { return l||r; },
-					"&&": function(l,r) { return l&&r; },
-					"^": function(l,r) { return l^r; },
-					"|": function(l,r) { return l|r; },
-					"&": function(l,r) { return l&r; },
-					"#": function(l,r) { return (l & 0xFF) | ((r&0xFF) << 8); }
-				}[element.operation])(element.left.value, element.right.value)
-			};
+
+			break ;
 		case 'unary':
 			if (element.operation === '-') {
 				return element.value;
@@ -963,7 +938,6 @@ function assemble(tree) {
 	verify(tree);			// Run some sanity checks
 	tree = breakdown(tree);	// Attempt to breakdown expressions
 
-	console.log(JSON.stringify(tree,null,4));
 	console.log(source(tree)); // TEMP: Output generated source
 	console.log("----------");
 
