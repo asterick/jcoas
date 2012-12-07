@@ -256,6 +256,6 @@ As a rule of thumb, the expression builder will use
 
 ##Things Left Todo
 * Capture PEG parser errors and produce more friendly warnings
-* Do shifter optimizations when possible (MUL A, 2 -> SHL A, 1)
 * Better assembler error output
+* Do shifter optimizations when possible (MUL A, 2 -> SHL A, 1)
 * Implement the relative offset (&) operator
