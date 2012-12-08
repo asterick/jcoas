@@ -644,13 +644,13 @@ function assemble(tree) {
 				a, b, op;
 
 			if (instruction.length === 1) {
-				op = 0x1F;
-				a = instruction.code;
-				b = fields[0].field;
+				op = 0;
+				b = instruction.code;
+				a = fields[0].field;
 			} else {
 				op = instruction.code;
-				a = fields[1].field;
 				b = fields[0].field;
+				a = fields[1].field;
 			}
 
 			// Convert instruction to a data-block
