@@ -561,7 +561,7 @@ function assemble(tree) {
 			value = expression.value & 0xFFFF;
 
 			if (value <= 30 || value === 0xFFFF) {
-				return { field: ((value - 1) & 0x1F) + 0x20 };
+				return { field: ((value + 1) & 0x1F) + 0x20 };
 			} 
 
 			return { field: 0x1f, immediate: value };
