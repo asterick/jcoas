@@ -83,7 +83,7 @@ function source(tree) {
 	return walk(deepClone(tree), function (element) {
 		switch (element.type) {
 		case 'label':
-			return element.name + ":";
+			return ":" + element.name;
 		case 'register':
 			return element.name;
 		case 'number':
@@ -97,7 +97,7 @@ function source(tree) {
 		case 'identifier':
 			return element.name;
 		case 'data':
-			return "\t.DATA " + element.arguments.join(", ");
+			return "\tDAT " + element.arguments.join(", ");
 		case 'unary':
 			return "(" + element.operation + element.value + ")";
 		case 'org':
