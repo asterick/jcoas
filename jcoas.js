@@ -491,7 +491,7 @@ function estimate(tree, estimates, force) {
 			return range(field, [0xFFFF].concat(_.range(0,30)));
 		case 'number':
 			value = field.value & 0xFFFF;
-			return (value > 30 || value < 0xFFFF) ? "yes" : "no";
+			return (value > 30 && value < 0xFFFF) ? "yes" : "no";
 		default:
 			console.log("UNHANDLED ESTIMATION: " + field.type);
 			process.exit(-1);
@@ -519,13 +519,16 @@ function estimate(tree, estimates, force) {
 	helper.walk(tree, function (element) {
 		switch (element.type) {
 		case 'org':
+			throw "";
 			minimum = maximum = element.value.value;
 			break ;
 		case 'align':
+			throw "";
 			minimum = align(minimum, element.value.value);
 			maximum = align(maximum, element.value.value);
 			break ;
 		case 'bss':
+			throw "";
 			minimum += element.value.value;
 			maximum += element.value.value;
 			break ;
