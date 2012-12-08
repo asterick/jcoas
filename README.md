@@ -125,9 +125,19 @@ or alter the flow control of the application.
         <td>Allocate a zero fill block</td>
     </tr>
     <tr>
-        <th>.data</tg>
+        <th>.data / DAT</tg>
         <td>data [, data ...]</td>
         <td>Insert raw word data</td>
+    </tr>
+    <tr>
+        <th>.little</tg>
+        <td>data [, data ...]</td>
+        <td>Treats following data as bytes (little-endian packing)</td>
+    </tr>
+    <tr>
+        <th>.big</tg>
+        <td>data [, data ...]</td>
+        <td>Treats following data as bytes (big-endian packing)</td>
     </tr>
     <tr>
         <th>.proc</tg>
