@@ -67,7 +67,7 @@ Directives provide assemble time functionality to the assembler.  These are
 operations that either build down into a different set of data, insert new data
 or alter the flow control of the application.
 
-<table>
+<table width="100%">
     <tr>
         <th colspan=3>Substituion</th>
     </tr> 
@@ -164,7 +164,7 @@ As a rule of thumb, the expression builder will use
 * Two instructions per indirect address
 * Two instructions per register preserve/restore
 
-<table>
+<table width="100%">
     <tr>
         <th colspan="3">Binary Operations</th>
     </tr>
