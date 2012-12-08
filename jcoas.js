@@ -653,7 +653,7 @@ function assemble(tree) {
 			return {
 				type: 'data',
 				arguments: [
-					{ type: "number", value: op | (a << 5) | (b << 10)}
+					{ type: "number", value: (a << 10) | (b << 5) | op}
 				].concat(immediates)
 			};
 		}
