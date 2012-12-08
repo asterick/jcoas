@@ -447,7 +447,7 @@ function estimate(tree, estimates, force) {
 			if (long) { return "maybe"; }
 			return "no";
 		}
-		return "yes;"
+		return "yes";
 	}
 
 	function guess(field) {
@@ -491,7 +491,7 @@ function estimate(tree, estimates, force) {
 			return range(field, [0xFFFF].concat(_.range(0,30)));
 		case 'number':
 			value = field.value & 0xFFFF;
-			return (value > 30 && value < 0xFFFF) ? "yes" : "no";
+			return (value <= 30 || value == 0xFFFF) ? "no" : "yes";
 		default:
 			console.log("UNHANDLED ESTIMATION: " + field.type);
 			process.exit(-1);
@@ -503,13 +503,14 @@ function estimate(tree, estimates, force) {
 			badEstimate = false;
 
 		minimum++; maximum++;
+
 		element.arguments.forEach(function (field){
 			switch(guess(field)) {
 			case 'yes':   minimum++;
 			case 'maybe': maximum++;
 			}
 		});
-		
+
 		return element;
 	}
 
