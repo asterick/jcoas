@@ -12,7 +12,7 @@
 				set PC, end
 			ifg a, 0xff
 				set PC, setcolor
-				bor a, b
+			bor a, b
 			set [0x8000+j], a
 			add i, 1
 			add j, 1
