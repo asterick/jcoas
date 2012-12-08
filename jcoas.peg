@@ -180,6 +180,7 @@ procedure
 identifier_list
 	= "(" _ ")" _ { return []; }
 	/ "(" _ a:(identifier "," _)* b:identifier ")" _ { return a.map(function(g) { return g[0]; }).concat(b); }
+	/ a:(identifier "," _)* b:identifier { return a.map(function(g) { return g[0]; }).concat(b); }
 
 expression_list
 	= a:(expression "," _)* b:expression { return a.map(function(g) { return g[0]; }).concat(b); }
