@@ -8,11 +8,11 @@ command_set
 	}
 
 command
-	= ":" _ i:identifier { return { line: line, column: column, type: "label", name: i.toUpperCase() }; }
+	= directive
+	/ ":" _ i:identifier { return { line: line, column: column, type: "label", name: i.toUpperCase() }; }
 	/ i:identifier ":" _  { return { line: line, column: column, type: "label", name: i.toUpperCase() }; }
 	/ op:word [ \t]+ args:expression_list { return { line: line, column: column, type: "operation", name: op.toUpperCase(), arguments: args }; }
 	/ op:identifier { return { line: line, column: column, type: "operation", name: op.toUpperCase(), arguments: [] }; }
-	/ directive
 
 directive
 	= procedure
@@ -78,7 +78,8 @@ data_block
 	}
 
 data_type
-	= ".data"i _ { return "word"; }
+	= "dat"i _ { return "word"; }
+	/ ".data"i _ { return "word"; }
 	/ ".dat"i _ { return "word"; }
 	/ ".big"i _ { return "big"; }
 	/ ".little"i _ { return "little"; }
