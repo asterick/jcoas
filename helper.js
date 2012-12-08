@@ -1,6 +1,7 @@
 "use strict";
 
-var _ = require("underscore");
+var _ = require("underscore"),
+	fs = require("fs");
 
 /**
  * Deep copy object
@@ -109,9 +110,20 @@ function source(tree) {
 	}).join("\n");
 }
 
+function error(err) {
+	var data = fs.readFileSync(err.file, "utf8"),
+		line = data.split(/\n\r|\r\n|\n|\r/)[err.line-1].replace(/\t/g,"    "),
+		notice = "("+err.line+", "+err.column+") "+err.name+":";
+
+	console.error(notice,line);
+	console.error(_.range(err.column+notice.length).map(function() {return "-";}).join("") + "^ " + err.message);
+	process.exit(-1);
+}
+
 
 module.exports = {
 	source: source,
 	walk: walk,
-	deepClone: deepClone
+	deepClone: deepClone,
+	error: error
 };

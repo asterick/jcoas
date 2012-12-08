@@ -706,7 +706,7 @@ function build(tree) {
 
 		// Locate all our keys that have no-delta in minimums and maximum
 		var keys = _.reduce(estimates, function (set, v, k) {
-			if (v.minimum === v.maximum) { 
+			if (v.minimum === v.maximum) {
 				set[k] = {
 					type: 'number',
 					value: v.minimum
@@ -727,12 +727,21 @@ function build(tree) {
 }
 
 var parsed = options._.reduce(function (list, f) {
-		return list.concat(global.parser.parse(fs.readFileSync(f, "utf8")));
+		var file = fs.readFileSync(f, "utf8");
+
+		try {
+			return list.concat(global.parser.parse(file));
+		} catch (e) {
+			if (e.found) { e.message = "Unexpected '" + e.found + "'"; }
+
+			e.file || (e.file = f);
+			helper.error(e);
+		}
 	}, []),
 	result = build(parsed);
 
 if (options.o) {
-	console.log((data(result).length/2).toString(), "words assembled.")
+	console.log((data(result).length/2).toString(), "words assembled.");
 
 	switch (options.f) {
 		case 's':

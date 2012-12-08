@@ -86,7 +86,12 @@ data_type
 include_types
 	= ".include"i _ {
 		return function (line, column, file) {
-			return global.parser.parse(file.toString("utf8"));
+			try {
+				return global.parser.parse(file.toString("utf8"));
+			} catch (e) {
+				e.file || (e.file = file);
+				throw e;
+			}
 		}
 	}
 	/ ".incbig"i _ {
