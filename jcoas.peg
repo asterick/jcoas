@@ -193,6 +193,21 @@ short_exp
 	= n:number { return { line: line, column: column, weight: 1, type: "number", value:n } }
 	/ s:string { return { line: line, column: column, type: "string", value:s } }
 	/ c:character { return { line: line, column: column, weight: 1, type: "number", value:c } }
+	/ "peek"i _ e:expression { 
+		return { 
+			line: line, 
+			column: column,
+			type: "indirect",
+			value: {
+				line: line, 
+				column: column,
+				type: "binary",
+				operation: "+",
+				left: { type: "register", name: "SP" },
+				right: e
+			}
+		}; 
+	}
 	/ r:register ![_a-z0-9]i _ { return { line: line, column: column, weight: 3, type: "register", name:r } }
 	/ i:identifier { return { line: line, column: column, weight: 2, type: "identifier", name:i.toUpperCase() } }
 	/ "(" _ o:expression ")" _ { return { line: line, column: column, type: "paren", value: o }; }

@@ -347,11 +347,11 @@ function verify(tree) {
 				var last = (i === element.arguments.length - 1),
 					bad = last ? "PUSH" : "POP";
 
-				helper.walk(exp, function (e) {
-					if (!last && e.integer) {
-						throw new Error("Cannot use integer values as a left-hand argument");
-					}
+				if (!last && exp.integer) {
+					throw new Error("Cannot use integer values as a left-hand argument");
+				}
 
+				helper.walk(exp, function (e) {
 					if (e.type === "register" && e.name === bad) {
 						throw new Error("Cannot use " + bad + "on this instruction");
 					}
