@@ -116,7 +116,8 @@ function error(err) {
 		notice = "("+err.line+", "+err.column+") "+err.name+":";
 
 	console.error(notice,line);
-	console.error(_.range(err.column+notice.length).map(function() {return "-";}).join("") + "^ " + err.message);
+
+	console.error(_.range(err.column+notice.length).map(function() {return " ";}).join("") + "\u2191 " + err.message);
 	process.exit(-1);
 }
 

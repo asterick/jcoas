@@ -85,11 +85,11 @@ data_type
 
 include_types
 	= ".include"i _ {
-		return function (line, column, file) {
+		return function (line, column, file, fn) {
 			try {
 				return global.parser.parse(file.toString("utf8"));
 			} catch (e) {
-				e.file || (e.file = file);
+				e.file || (e.file = fn);
 				throw e;
 			}
 		}
@@ -129,17 +129,35 @@ include
 
 		return args.reduce(function (added, a) {
 			if (a.type !== 'string') {
-				throw new Error("Include requires a string argument");
+				throw {
+					name: "IncludeError",
+					message: "Include requires a string argument",
+					line: line,
+					column: column
+					};
 			}
 			
 			var fn = a.value,
 				before = active.concat();
 			if (active.indexOf(fn) >= 0) {
-				throw new Error("Recursive inclusion of " + fn);
+				throw {
+					name: "IncludeError",
+					message: "Recursive include discovered",
+					line: line,
+					column: column
+					};
 			}
 
 			active.push(fn);
-			var result = parser(line, column, require("fs").readFileSync(fn));
+			try {
+				var file = require("fs").readFileSync(fn);
+			} catch(e) {
+				e.message  = "Could not open '" + fn + "'";
+				e.line = line;
+				e.column = column;
+				throw e;
+			}
+			var result = parser(line, column, file, fn);
 			active.pop();
 
 			return added.concat(result);
