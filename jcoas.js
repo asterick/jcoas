@@ -3,7 +3,6 @@
 
 var pegjs = require("pegjs"),
 	fs = require("fs"),
-	_ = require("underscore"),
 	optimist = require("optimist")
 		.usage("Usage: $0 [assembly files]")
 		.describe("f", "Output format")
@@ -17,9 +16,10 @@ var pegjs = require("pegjs"),
 	assembler = require("./assembler.js"),
 	helper = require("./helper.js");
 
-var options = optimist.argv;
+var options = optimist.argv,
+	inputFiles = options._;
 
-if (options._.length < 1) {
+if (inputFiles.length < 1) {
 	optimist.showHelp();
 	process.exit(-1);
 }
@@ -31,15 +31,17 @@ global.parser = pegjs.buildParser(
 function error(err) {
 	var data = fs.readFileSync(err.file, "utf8"),
 		line = data.split(/\n\r|\r\n|\n|\r/)[err.line-1].replace(/\t/g,"    "),
-		notice = "("+err.line+", "+err.column+") "+err.name+":";
+		notice = "("+err.line+", "+err.column+") "+err.name+":",
+		arrow = "\u2191";
 
 	console.error(notice,line);
 
-	console.error(_.range(err.column+notice.length).map(function() {return " ";}).join("") + "\u2191 " + err.message);
+	while(arrow.length <= err.column+notice.length) { arrow = " " + arrow; }
+	console.error(arrow, err.message);
 	process.exit(-1);
 }
 
-var parsed = options._.reduce(function (list, f) {
+var parsed = inputFiles.reduce(function (list, f) {
 		var file = fs.readFileSync(f, "utf8");
 
 		try {
