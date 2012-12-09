@@ -675,7 +675,7 @@ function data(tree, little) {
 
 	output = new Buffer(data.length*2);
 	data.forEach(function(word, i) {
-		output[little?'writeInt16LE':'writeInt16BE'](word & 0xFFFF,i*2);
+		output[little?'writeUInt16LE':'writeUInt16BE'](word & 0xFFFF,i*2);
 	});
 
 	return output;
