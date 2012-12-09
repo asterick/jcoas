@@ -28,6 +28,16 @@ global.parser = pegjs.buildParser(
 	fs.readFileSync("jcoas.peg", "utf8"), 
 	{trackLineAndColumn: true});
 
+function error(err) {
+	var data = fs.readFileSync(err.file, "utf8"),
+		line = data.split(/\n\r|\r\n|\n|\r/)[err.line-1].replace(/\t/g,"    "),
+		notice = "("+err.line+", "+err.column+") "+err.name+":";
+
+	console.error(notice,line);
+
+	console.error(_.range(err.column+notice.length).map(function() {return " ";}).join("") + "\u2191 " + err.message);
+	process.exit(-1);
+}
 
 var parsed = options._.reduce(function (list, f) {
 		var file = fs.readFileSync(f, "utf8");
@@ -38,7 +48,7 @@ var parsed = options._.reduce(function (list, f) {
 			if (e.found) { e.message = "Unexpected '" + e.found + "'"; }
 
 			e.file || (e.file = f);
-			helper.error(e);
+			error(e);
 		}
 	}, []),
 	result = assembler.build(parsed, options.x.toLowerCase() === "false");

@@ -3,12 +3,9 @@
 function closure(cb) {
 	// Node Common.JS Style
 	if (module && module.exports) {
-		var ret = cb.call(global, require);
-		Object.getOwnPropertyNames(ret).forEach(function(key) {
-			module.exports[key] = ret[key];
-		});
+		cb.call(module.exports, require);
 	} else {
-		define.apply(window, arguments);
+		define(function (require) { return cb.apply({}, require); });
 	}
 }
 
@@ -362,7 +359,7 @@ closure(function (require) {
 		}, []);
 	}
 
-	return {
-		breakdown: breakdown
-	};
+	this.breakdown = breakdown;
+
+	return this;
 });
