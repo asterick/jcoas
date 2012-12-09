@@ -1,5 +1,16 @@
-module.exports = {
-	"INSTRUCTIONS": {
+"use strict";
+
+function closure(cb) {
+	// Node Common.JS Style
+	if (module && module.exports) {
+		cb.call(module.exports, require);
+	} else {
+
+	}
+}
+
+closure(function (require) {
+	this.INSTRUCTIONS = {
 		// 2-OP characters
 		"SET" : { "code": 0x01, "length": 2 },
 		"MOV" : { "code": 0x01, "length": 2 },
@@ -44,5 +55,5 @@ module.exports = {
 		"HWN" : { "code": 0x10, "length": 1 },
 		"HWQ" : { "code": 0x11, "length": 1 },
 		"HWI" : { "code": 0x12, "length": 1 }
-	}
-};
+	};
+});
