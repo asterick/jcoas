@@ -226,6 +226,8 @@ closure(function (require) {
 							]
 						});
 						break ;
+					case 'paren':
+						return tree.value;
 					case 'binary':
 						if (!BINARY_OPS[tree.operation]) {
 							throw new Error("Cannot run-time execute operation " + tree.operation);
@@ -250,7 +252,7 @@ closure(function (require) {
 						});
 						break ;
 					default:
-						console.log("UNKNOWN EXPRESSION TERM: " + exp);
+						console.log("UNKNOWN EXPRESSION TERM: " + JSON.stringify(exp));
 						process.exit(-1);
 					}
 				}
