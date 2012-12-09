@@ -3,9 +3,12 @@
 function closure(cb) {
 	// Node Common.JS Style
 	if (module && module.exports) {
-		cb.call(module.exports, require);
+		var ret = cb.call(global, require);
+		Object.getOwnPropertyNames(ret).forEach(function(key) {
+			module.exports[key] = ret[key];
+		});
 	} else {
-
+		define.apply(window, arguments);
 	}
 }
 
@@ -131,8 +134,10 @@ closure(function (require) {
 		process.exit(-1);
 	}
 
-	this.source = source;
-	this.walk = walk;
-	this.deepClone = deepClone;
-	this.error = error;
+	return {
+		source: source,
+		walk: walk,
+		deepClone: deepClone,
+		error: error
+	};
 });

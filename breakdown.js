@@ -3,9 +3,12 @@
 function closure(cb) {
 	// Node Common.JS Style
 	if (module && module.exports) {
-		cb.call(module.exports, require);
+		var ret = cb.call(global, require);
+		Object.getOwnPropertyNames(ret).forEach(function(key) {
+			module.exports[key] = ret[key];
+		});
 	} else {
-
+		define.apply(window, arguments);
 	}
 }
 
@@ -359,5 +362,7 @@ closure(function (require) {
 		}, []);
 	}
 
-	this.breakdown = breakdown;
+	return {
+		breakdown: breakdown
+	};
 });
