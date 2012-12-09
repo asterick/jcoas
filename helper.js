@@ -10,8 +10,7 @@ function closure(cb) {
 }
 
 closure(function (require) {
-	var _ = require("underscore"),
-		fs = require("fs");
+	var fs = require("fs");
 
 	/**
 	 * Deep copy object
@@ -20,12 +19,15 @@ closure(function (require) {
 		if (Array.isArray(obj)) { return obj.map(deepClone); }
 		if (obj === null) { return null; }
 
+		var clone;
+
 		switch (typeof obj) {
 			case 'object':
-				return _.reduce(obj, function (memo, v, k) {
-					memo[k] = deepClone(v);
-					return memo;
-				}, {});
+				clone = {};
+				Object.getOwnPropertyNames(obj).forEach(function (k){
+					clone[k] = deepClone(obj[k]);
+				});
+				return clone;
 			case 'function':
 			case 'number':
 			case 'string':
