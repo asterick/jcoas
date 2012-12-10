@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-var pegjs = require("pegjs"),
-	fs = require("fs"),
+var fs = require("fs"),
 	optimist = require("optimist")
 		.usage("Usage: $0 [assembly files]")
 		.describe("f", "Output format")
@@ -13,8 +12,7 @@ var pegjs = require("pegjs"),
 		.alias("x", "expressions")
 		.default("x", "true"),
 
-	assembler = require("./assembler.js"),
-	helper = require("./helper.js");
+	assembler = require("./assembler.js");
 
 var options = optimist.argv,
 	inputFiles = options._;
@@ -23,10 +21,6 @@ if (inputFiles.length < 1) {
 	optimist.showHelp();
 	process.exit(-1);
 }
-
-global.parser = pegjs.buildParser(
-	fs.readFileSync("jcoas.peg", "utf8"), 
-	{trackLineAndColumn: true});
 
 function error(err) {
 	var data = fs.readFileSync(err.file, "utf8"),
@@ -41,19 +35,7 @@ function error(err) {
 	process.exit(-1);
 }
 
-var parsed = inputFiles.reduce(function (list, f) {
-		var file = fs.readFileSync(f, "utf8");
-
-		try {
-			return list.concat(global.parser.parse(file));
-		} catch (e) {
-			if (e.found) { e.message = "Unexpected '" + e.found + "'"; }
-
-			e.file || (e.file = f);
-			error(e);
-		}
-	}, []),
-	result = assembler.build(parsed, options.x.toLowerCase() === "false");
+var result = assembler.fromFiles(inputFiles, options.x.toLowerCase() === "false");
 
 if (options.o) {
 	console.log((data(result).length/2).toString(), "words assembled.");
@@ -62,7 +44,7 @@ if (options.o) {
 		case 's':
 		case 'source':
 		case 'data':
-			fs.writeFileSync(options.o, helper.source(result));
+			fs.writeFileSync(options.o, assembler.source(result));
 			break ;
 		case 'l':
 		case 'little':
@@ -77,5 +59,5 @@ if (options.o) {
 			break ;
 	}
 } else {
-	console.log(helper.source(result));
+	console.log(assembler.source(result));
 }

@@ -85,51 +85,15 @@ data_type
 	/ ".little"i _ { return "little"; }
 
 include_types
-	= ".include"i _ {
-		return function (line, column, file, fn) {
-			try {
-				return global.parser.parse(file.toString("utf8"));
-			} catch (e) {
-				e.file || (e.file = fn);
-				throw e;
-			}
-		}
-	}
-	/ ".incbig"i _ {
-		return function (line, column, file) {
-			var data = [];
-			for (i = 0; i < file.length; i+=2) { 
-				data[i/2] = { type: 'number', value: file.readUInt16BE(i, true) };
-			}
-			return { line: line, column: column, type: "data", arguments:data }
-		}
-	}
-	/ ".inclittle"i _ {
-		return function (line, column, file) {
-			var data = [];
-			for (i = 0; i < data.length; i+=2) { 
-				data[i/2] = { type: 'number', value: file.readUInt16LE(i, true) };
-			}
-			return { line: line, column: column, type: "data", arguments:data }
-		}
-	}
-	/ ".incbytes"i _ {
-		return function (line, column, file) {
-			var data = [];
-			for (i = 0; i < file.length; i++) { 
-				data[i] = { type: 'number', value: file[i] };
-			}
-			return { line: line, column: column, type: "data", arguments:data }
-		}
-	}
+	= ".include"i _ { return "include"; }
+	/ ".incbytes"i _ { return "big"; }
+	/ ".incbytes"i _ { return "little"; }
+	/ ".incbytes"i _ { return "bytes"; }
 
 include
-	= parser:include_types args:expression_list {
-		var context = global.parser,
-			active = context.active || (context.active = []);
-
-		return args.reduce(function (added, a) {
-			if (a.type !== 'string') {
+	= include_type:include_types args:expression_list {
+		args.forEach(function (f) {
+			if (f.type !== 'string') {
 				throw {
 					name: "IncludeError",
 					message: "Include requires a string argument",
@@ -137,32 +101,15 @@ include
 					column: column
 					};
 			}
-			
-			var fn = a.value,
-				before = active.concat();
-			if (active.indexOf(fn) >= 0) {
-				throw {
-					name: "IncludeError",
-					message: "Recursive include discovered",
-					line: line,
-					column: column
-					};
-			}
+		});
 
-			active.push(fn);
-			try {
-				var file = require("fs").readFileSync(fn);
-			} catch(e) {
-				e.message  = "Could not open '" + fn + "'";
-				e.line = line;
-				e.column = column;
-				throw e;
-			}
-			var result = parser(line, column, file, fn);
-			active.pop();
-
-			return added.concat(result);
-		}, []);
+		return {
+			type: "include",
+			format: include_type,
+			column: column,
+			line: line,
+			arguments: args
+		};
 	}
 
 macro 
