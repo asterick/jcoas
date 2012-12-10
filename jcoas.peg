@@ -86,8 +86,8 @@ data_type
 
 include_types
 	= ".include"i _ { return "include"; }
-	/ ".incbytes"i _ { return "big"; }
-	/ ".incbytes"i _ { return "little"; }
+	/ ".incbig"i _ { return "big"; }
+	/ ".inclittle"i _ { return "little"; }
 	/ ".incbytes"i _ { return "bytes"; }
 
 include

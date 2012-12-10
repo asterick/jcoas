@@ -521,21 +521,30 @@
 			if (node.type !== 'include') { return ; }
 
 			return node.arguments.map(function (file) {
-				var buffer = fs.readFileSync(file.value);
-			
+				var buffer = fs.readFileSync(file.value),
+					array = [],
+					i;
+
 				switch (node.format) {
 				case 'source':
 					return include(parser.parse(buffer.toString('utf8')));
 				case 'big':
+					for (i = 0; i < buffer.length; i+= 2) { array[i/2] = {type:"number", value: buffer.readUInt16BE(i, true)}; }
+					break ;
 				case 'little':
+					for (i = 0; i < buffer.length; i+= 2) { array[i/2] = {type:"number", value: buffer.readUInt16LE(i, true)}; }
+					break ;
 				case 'bytes':
-					return {
-						type: 'data',
-						line: node.line,
-						column: node.column,
-						arguments: []
-					};
+					for (i = 0; i < buffer.length; i++) { array[i] = {type:"number", value: buffer[i]}; }
+					break ;
 				}
+
+				return {
+					type: 'data',
+					line: node.line,
+					column: node.column,
+					arguments: array
+				};
 			});
 		});
 	}
@@ -1243,13 +1252,15 @@
 	}
 
 	function fromFiles(files, expressions) {
-		var t = new Date().getTime();
-		return build([{
-			type: "include",
-			format: "source",
-			arguments: files.map(function(f) { return {type:"string", value:f}; })
-		}], expressions);
-		console.log("Assembled in", (new Date().getTime() - t)/1000, "seconds");
+		var t = new Date().getTime(),
+			r = build([{
+				type: "include",
+				format: "source",
+				arguments: files.map(function(f) { return {type:"string", value:f}; })
+			}], expressions);
+		console.error("Assembled in", (new Date().getTime() - t)/1000, "seconds");
+			
+		return r;
 	}
 
 	module.exports.fromFiles = fromFiles;
