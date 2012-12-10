@@ -1,4 +1,5 @@
 "use strict";
+
 (function() {
 	var fs = require("fs"),
 		pegjs = require("pegjs"),
@@ -1242,11 +1243,13 @@
 	}
 
 	function fromFiles(files, expressions) {
+		var t = new Date().getTime();
 		return build([{
 			type: "include",
 			format: "source",
 			arguments: files.map(function(f) { return {type:"string", value:f}; })
 		}], expressions);
+		console.log("Assembled in", (new Date().getTime() - t)/1000, "seconds");
 	}
 
 	module.exports.fromFiles = fromFiles;
