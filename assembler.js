@@ -5,18 +5,18 @@ var fs, parser, _, root;
 // Cross compatibility zone
 if (typeof module !== "undefined") {
 	root = module.exports;
-	fs = require("fs");
+	root.readFile = require("fs").readFileSync;
 	_ = require("underscore");
-	parser = require("pegjs").buildParser(fs.readFileSync("jcoas.peg", "utf8"), {trackLineAndColumn: true});
+	parser = require("pegjs").buildParser(root.readFile("jcoas.peg", "utf8"), {trackLineAndColumn: true});
 } else {
 	root = (window.jcoas || (windows.jcoas = {}));
 	_ = window._;
-	fs = {};	// TODO: READER, SYNCRONOUS!
 	parser = window.jcoas_parser;
 }
 
 (function() {
-	var INDEXABLE = ["A","B","C","X","Y","Z","I","J","SP"],
+	var root = this,
+		INDEXABLE = ["A","B","C","X","Y","Z","I","J","SP"],
 		INSTRUCTIONS = {
 		// 2-OP characters
 		"SET" : { "code": 0x01, "length": 2 },
@@ -516,7 +516,7 @@ if (typeof module !== "undefined") {
 			if (node.type !== 'include') { return ; }
 
 			return node.arguments.map(function (file) {
-				var buffer = fs.readFileSync(file.value),
+				var buffer = root.readFile(file.value),
 					array = [],
 					i;
 
