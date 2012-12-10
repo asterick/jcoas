@@ -60,26 +60,14 @@
 	/**
 	 * Deep copy object
 	 */
-	function deepClone(obj) {
-		if (Array.isArray(obj)) { return obj.map(deepClone); }
-		if (obj === null) { return null; }
+	function clone(obj) {
+		if (obj === null || typeof obj !== "object") { return obj; }
+		if (Array.isArray(obj)) { return obj.map(clone); }
 
-		var clone;
-
-		switch (typeof obj) {
-			case 'object':
-				clone = {};
-				Object.getOwnPropertyNames(obj).forEach(function (k){
-					clone[k] = deepClone(obj[k]);
-				});
-				return clone;
-			case 'function':
-			case 'number':
-			case 'string':
-			case 'boolean':
-			case 'undefined':
-				return obj;
-		}
+		return _.reduce(obj, function (list, v, k) {
+			list[k] = clone(v);
+			return list;
+		}, {});
 	}
 
 	function walk(element, callback) {
@@ -138,7 +126,7 @@
 	function source(tree) {
 		if (!Array.isArray(tree)) { tree = [tree]; }
 
-		return walk(deepClone(tree), function (element) {
+		return walk(clone(tree), function (element) {
 			switch (element.type) {
 			case 'label':
 				return ":" + element.name;
@@ -699,7 +687,7 @@
 		return walk(tree, function(element) {
 			// Replace identifiers
 			if (element.type === 'identifier' && set[element.name]) {
-				return deepClone(set[element.name]);
+				return clone(set[element.name]);
 			}
 		})
 	}
@@ -729,7 +717,7 @@
 
 					return list.concat(
 						define(
-							define(deepClone(macro.contents), args), 
+							define(clone(macro.contents), args), 
 							equates)
 						);
 
@@ -947,7 +935,7 @@
 
 			do {
 				// Calculate what our value should be now
-				i = flatten(define(deepClone(equation), values)).value & 0xFFFF;
+				i = flatten(define(clone(equation), values)).value & 0xFFFF;
 
 				if (desired.indexOf(i) >= 0) {
 					short = true;
@@ -1223,7 +1211,7 @@
 					previous[key].minimum == est.minimum &&
 					previous[key].maximum == est.maximum;
 			}, null);
-			previous = deepClone(estimates);
+			previous = clone(estimates);
 
 			if (should_force) {
 				console.log("WARNING: Estimations went stale, forcing long constants");
