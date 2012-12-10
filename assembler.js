@@ -15,7 +15,7 @@ if (typeof module !== "undefined") {
 	parser = require("pegjs").
 				buildParser(require('fs').readFileSync("jcoas.peg", "utf8"), {trackLineAndColumn: true});
 } else {
-	root = (window.jcoas || (windows.jcoas = {}));
+	root = (window.jcoas || (window.jcoas = {}));
 	_ = window._;
 	parser = window.jcoas_parser;
 }
