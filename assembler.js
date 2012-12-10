@@ -5,9 +5,14 @@ var fs, parser, _, root;
 // Cross compatibility zone
 if (typeof module !== "undefined") {
 	root = module.exports;
-	root.readFile = require("fs").readFileSync;
+	root.readFile = function (fn) {
+		var data = require("fs").readFileSync(fn),
+			text = data.toString('utf8');
+		
+		return { buffer: data, text: text };
+	}
 	_ = require("underscore");
-	parser = require("pegjs").buildParser(root.readFile("jcoas.peg", "utf8"), {trackLineAndColumn: true});
+	parser = require("pegjs").buildParser(require('fs').readFileSync("jcoas.peg", "utf8"), {trackLineAndColumn: true});
 } else {
 	root = (window.jcoas || (windows.jcoas = {}));
 	_ = window._;
@@ -515,22 +520,22 @@ if (typeof module !== "undefined") {
 		return walk(tree, function (node) {
 			if (node.type !== 'include') { return ; }
 
-			return node.arguments.map(function (file) {
-				var buffer = root.readFile(file.value),
+			return node.arguments.map(function (fn) {
+				var file = root.readFile(fn.value),
 					array = [],
 					i;
 
 				switch (node.format) {
 				case 'source':
-					return include(parser.parse(buffer.toString('utf8')));
+					return include(parser.parse(file.text));
 				case 'big':
-					for (i = 0; i < buffer.length; i+= 2) { array[i/2] = {type:"number", value: buffer.readUInt16BE(i, true)}; }
+					for (i = 0; i < buffer.length; i+= 2) { array[i/2] = {type:"number", value: file.buffer.readUInt16BE(i, true)}; }
 					break ;
 				case 'little':
-					for (i = 0; i < buffer.length; i+= 2) { array[i/2] = {type:"number", value: buffer.readUInt16LE(i, true)}; }
+					for (i = 0; i < buffer.length; i+= 2) { array[i/2] = {type:"number", value: file.buffer.readUInt16LE(i, true)}; }
 					break ;
 				case 'bytes':
-					for (i = 0; i < buffer.length; i++) { array[i] = {type:"number", value: buffer[i]}; }
+					for (i = 0; i < buffer.length; i++) { array[i] = {type:"number", value: file.buffer[i]}; }
 					break ;
 				}
 
