@@ -12,7 +12,8 @@ if (typeof module !== "undefined") {
 		return { buffer: data, text: text };
 	}
 	_ = require("underscore");
-	parser = require("pegjs").buildParser(require('fs').readFileSync("jcoas.peg", "utf8"), {trackLineAndColumn: true});
+	parser = require("pegjs").
+				buildParser(require('fs').readFileSync("jcoas.peg", "utf8"), {trackLineAndColumn: true});
 } else {
 	root = (window.jcoas || (windows.jcoas = {}));
 	_ = window._;
